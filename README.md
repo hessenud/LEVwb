@@ -27,6 +27,41 @@ optional
 
 
 
+HTTP requests 
+====================
+    http://TPOW-1.local/on    -- switch ON
+    
+    http://TPOW-1.local/off    -- switch OFF
+    
+    http://TPOW-1.local/pwr    -- return actual measurements as XML
+    
+    http://TPOW-1.local/energy?plan=0&requested=3000&optional=6000&start=0&end=10800     
+        -- plan = number of energy request (0)
+            / if plan param is missing a new request is allocated     
+        -- requested = requested energy in Wh (3kWh)
+        -- optional  = optional energy           (6kWh)    
+        -- start     = earliest start in seconds from NOW  (now)
+        -- end         = latest end     in seconds from NOW      (3h from now)
+                                                                                
+    http://TPOW-1.local/energy?plan=0&requested=1000&optional=6000&startTime=08:00&endTime=16:00    
+        -- see above.. 
+        -- startTime = earliest start as Time of Day
+        -- endTime     = latest end     as Time of Day    
+                                                                                
+                                                                                        
+    http://TPOW-1.local/energy?plan=0                    -- delete plan 0                                                                                                                                                    
+                                                                                  
+
+
+You have to calibrate the measurement with a known load or with another measurement. If you use a known load, make sure to use a resitive load like a light bulb.
+    
+    http://TPOW-1.local/calibrate?power=2000&current=8.8&voltage=228            
+            -- calibrate measurement
+            -- power    = active power (2000)[W]
+            -- current    = active current (8.8)[A]
+            -- voltage    = active voltage (228)[V]
+    
+
 
 ToDo
 ============
