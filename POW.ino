@@ -29,7 +29,7 @@ void unblockingDelay(unsigned long mseconds) {
 }
 
 
-#define REF_PWR 5.0
+#define REF_PWR 500.0
 #define REF_VOLT 230.0
 double expectedVoltage = REF_VOLT;
 double expectedPwr     = REF_PWR;
@@ -77,12 +77,12 @@ void setPOWprefs(double i_pwrMultiplier, double i_currentMultiplier, double i_vo
 
 void calibrate() 
 {
-    unblockingDelay(10000);
+  hlw8012.resetMultipliers();
     if (expectedVoltage!=0 && expectedPwr != 0 && expectedCurrent !=0 ) {
       // Calibrate using a 60W bulb (pure resistive) on a 230V line
       hlw8012.expectedActivePower(expectedPwr); //double
       hlw8012.expectedVoltage(expectedVoltage);
-      hlw8012.expectedCurrent( (expectedCurrent = double(expectedPwr) / expectedVoltage)) ;
+      hlw8012.expectedCurrent(expectedCurrent ); // (expectedCurrent = double(expectedPwr) / expectedVoltage)) ;
     }
     // Show corrected factors
     DEBUG_PRINT("[HLW] current  : %f\n",(float)expectedCurrent);
@@ -92,6 +92,7 @@ void calibrate()
     DEBUG_PRINT("[HLW] voltage multiplier : %f\n", pow_voltageMultiplier);
     DEBUG_PRINT("[HLW] power multiplier   : %f\n", pow_pwrMultiplier);
     DEBUG_PRINT("\n");
+    
     
     savePrefs();
     pow_pwrMultiplier     = hlw8012.getPowerMultiplier();
@@ -187,8 +188,12 @@ unsigned timeStr2Value(  const char* i_ts)
 
 void handleEnergyReq()
 {
+  unsigned earliestStart = 0;
+  unsigned latestStop    = 0; 
+
   unsigned requestedEnergy = 0 KWh;
   unsigned optionalEnergy  = 0 KWh;
+  
   unsigned long _now = getTime();
   unsigned dayoffset = _now - (_now%(1 DAY));
   int    planHandle = -1;
@@ -273,9 +278,9 @@ void handleCalReq()
     String p1Val = http_server.arg(n);
     double value= atof( p1Val.c_str() );
     DEBUG_PRINT("p%dName: %s  val: %s\n",n, p1Name.c_str(), p1Val.c_str() );
-    if (p1Name == String("power"))           { expectedPwr= value; resp = "OK";
-    } else if (p1Name == String("voltage"))  { expectedVoltage= value; resp = "OK";
-    } else if (p1Name == String("current"))  { expectedCurrent= value; resp = "OK";
+    if (p1Name == String("power"))           { expectedPwr=  value; resp = "OK";
+    } else if (p1Name == String("voltage"))  { expectedVoltage = value; resp = "OK";
+    } else if (p1Name == String("current"))  { expectedCurrent = value; resp = "OK";
     } else {
     }
   }

@@ -1,5 +1,3 @@
-#ifdef USE_SSDP
-
 String schemaS;
 void setupSSDP() 
 {
@@ -32,10 +30,9 @@ void setupSSDP()
     SSDP.setDeviceType("urn:schemas-simple-energy-management-protocol:device:Gateway:1");  
     SSDP.setHTTPPort(SEMP_PORT);
 
-    //
-    SSDP.setTTL(9);
-        /** SSDP schema has to be recreated, as the SSDP Library Scheme can't be sufficiently expanded **/
-    
+    // SSDP.setTTL(9);
+   
+    /** SSDP schema has to be recreated, as the SSDP Library Scheme can't be sufficiently expanded **/
     //-------  Schema overwrite BEGIN
     const char* ssdpScheme = g_semp->makeSsdpScheme( &ssdpcfg);
     DEBUG_PRINT(" SSDPC Scheme:\n%s\n", ssdpScheme );        
@@ -49,6 +46,3 @@ void setupSSDP()
 
     Serial.printf_P(PSTR("Ready!\n"));
 }
-#else
-void setupSSDP() {}
-#endif

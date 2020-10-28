@@ -1,11 +1,12 @@
-#ifdef USE_MQTT
+#ifdef MQTTBROKER
 #include <ArduinoMqttClient.h>
-
+ 
 WiFiClient wifiClient;
 MqttClient mqttClient(wifiClient);
 
-const char* broker = "raspi";
-int        port     = 1883;
+const char* broker = MQTTBROKER;
+int        port    = MQTTPORT;
+
 const char* topic_led               = "home/" HOSTNAME "/led";
 const char* topic_rel               = "home/" HOSTNAME "/relay";
 const char* topic_time              = "home/" HOSTNAME "/time";
@@ -42,37 +43,37 @@ void setupMQTT()
     mqtt_conn = false;
     DEBUG_PRINT("[MQTT] connection failed! Error code = %d\n", mqttClient.connectError());
   } 
-  Serial.println();
 }
 
 void sendTopic(const char* topic, float value)
 {
-    _DEBUG_PRINT("[MQTT] send topic %s message: %f\n", topic, value);
-  
-      // send message, the Print interface can be used to set the message contents
-      mqttClient.beginMessage(topic);
-      mqttClient.print(topic);
-      mqttClient.print(":");
-      mqttClient.print(value);
-      mqttClient.endMessage();
-   
+  _DEBUG_PRINT("[MQTT] --- send topic %s message: %f\n", topic, value);
+  // send message, the Print interface can be used to set the message contents
+  mqttClient.beginMessage(topic);
+  mqttClient.print(topic);
+  mqttClient.print(":");
+  mqttClient.print(value);
+  mqttClient.endMessage();
+  _DEBUG_PRINT("[MQTT] -- done\n");
 }
 
 
 void sendTopic(const char* topic, const char* value)
 {
-  _DEBUG_PRINT("[MQTT] send topic %s message: %s\n", topic, value);
-    // send message, the Print interface can be used to set the message contents
-    mqttClient.beginMessage(topic);
-    mqttClient.print(topic);
-      mqttClient.print(":");
-      mqttClient.print(value);
-    mqttClient.endMessage();
-
+  _DEBUG_PRINT("[MQTT] -- send topic %s message: %s\n", topic, value);
+  // send message, the Print interface can be used to set the message contents
+  mqttClient.beginMessage(topic);
+  mqttClient.print(topic);
+  mqttClient.print(":");
+  mqttClient.print(value);
+  mqttClient.endMessage();
+  _DEBUG_PRINT("[MQTT] -- done\n");
 }
 
 void loopMQTT() 
 {
+  _DEBUG_PRINT("[MQTT] LOOP enter\n");
+  
   if ( mqtt_conn ) {
     // call poll() regularly to allow the library to send MQTT keep alives which
     // avoids being disconnected by the broker
@@ -121,6 +122,7 @@ void loopMQTT()
       setupMQTT();
     }
  }
+  _DEBUG_PRINT("[MQTT] LOOP en´it\n");  
 }
 #else
 void setupMQTT(){}

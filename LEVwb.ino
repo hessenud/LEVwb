@@ -1,10 +1,10 @@
+  
+#define WLAN_SSID "the ssid"
+#define WLAN_PASS "the password"
 
-#define WLAN_SSID "phizbox"
-#define WLAN_PASS "gajlkj8k765mm_ak47"
+#define DEV_BOARD     /////////<<<<<<< DEVELOPER Board Selection
 
 /****************************************************************/
-#include <SPI.h>
-#include <Wire.h>
 #include <EEPROM.h>
 
 #include <uSEMP.h>
@@ -21,7 +21,6 @@ unsigned long getTime();  // forward reference for definitions following in "lat
 #define USE_POW
 #define _USE_POW_DBG
 #define USE_POW_INT
-#define USE_MQTT
 
 #define str(s) #s
 #define xstr(xs) str(xs)
@@ -38,23 +37,31 @@ unsigned long getTime();  // forward reference for definitions following in "lat
 #endif
 #define _DEBUG_PRINT(...)
 
-#define __DEV_BOARD     /////////<<<<<<< DEVELOPER Board Selection
+
 #ifdef DEV_BOARD
 # define DEV_IDX 2
-# define LED_PIN LED_BUILTIN
+# define LED_PIN 2
 # define HLW_SIM
 # define USE_OLED
 # define DEV_BASENAME "DevBoard"
 # define DEV_EXT " CHG"
 # define HOSTNAME "DEVPOW_" DEV_NR 
+# define LED_LEVEL(l) (l)
+# define MQTTBROKER  "raspi"
+# define MQTTPORT    1883
 #else
+// the real deal
 # define LED_PIN 15
 # define DEV_IDX 1
 # define DEV_EXT
 # define DEV_BASENAME "TwizyPOW"
 # define HOSTNAME "TPOW_" DEV_NR 
+# define MQTTBROKER  "raspi"
+# define MQTTPORT    1883
+# define LED_LEVEL(l) (!(l))
 #endif
 
+#define TIMEZONE (+2*100)   /*MESZ / CEST +2 */  /*MEZ / CET +1*/
 
 #define DEV_NR xstr(DEV_IDX)
 #define DEVICE_SERIAL_NR    1
@@ -78,7 +85,7 @@ unsigned long getTime();  // forward reference for definitions following in "lat
 #define _IO5    // SEL
 #define _PWM0   12 // RELAIS
 
-// HLW8012
+// HLW8012 -- POW Rev1
 
 #ifndef HLW8012_SUPPORT
 #define HLW8012_SUPPORT     1
@@ -87,7 +94,7 @@ unsigned long getTime();  // forward reference for definitions following in "lat
 #define HLW8012_CF1_PIN     13
 #define HLW8012_CF_PIN      14
 
-// CSE7766
+// CSE7766 -- POW Rev2
 #define CSE7766_SUPPORT         1
 #define CSE7766_PIN             1
 
@@ -124,8 +131,6 @@ double   pow_voltageMultiplier;
 unsigned pow_cumulatedEnergy;
 
 //----- PLAN  -----
-unsigned earliestStart;
-unsigned latestStop; 
 
 
 //----- DEVICE -----
@@ -154,7 +159,6 @@ const char* password = WLAN_PASS;  //replace "WLAN_PASS" with your WIFI's passwo
 #ifdef USE_OLED
 ///
 // OLED Display support
-#include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
@@ -189,7 +193,7 @@ void setup() {
   setupOLED();
   setupWIFI();
   setupPOW(); 
-  setupTimeClk( +1 /*MEZ / CET */ );
+  setupTimeClk( TIMEZONE );
   setupIO();
   setupOTA(); 
   setupWebSrv();
@@ -214,7 +218,9 @@ void loop()
   
   static unsigned long lastLoop;
   unsigned long thisLoop = millis();
-  if (thisLoop - lastLoop > 40 ) Serial.printf("Long cycle %lu!!\n", thisLoop - lastLoop);
+  if (thisLoop - lastLoop > 50 ) {
+    DEBUG_PRINT("Long cycle %lu!!\n", thisLoop - lastLoop);
+  }
   lastLoop = thisLoop;
   
   loopIO();
@@ -222,20 +228,19 @@ void loop()
   loopWebSrv();
   loopDebug();
   unsigned long now = getTime();
-  if ( now != ltime  ) {
-    char buffer[10*40];
-    char* wp = &buffer[0];
-    
-    g_semp->dumpPlans( wp);
-    draw( buffer );
-    
+  char buffer[10*40];
+  char* wp = &buffer[0];
+  
+  g_semp->dumpPlans( wp ) ;
+  draw( buffer );
+  if ( now - ltime > 5  ) {  
     DEBUG_PRINT("LED: %s  Relay: %s\n", state2txt(!ledState), state2txt( !relayState) );
     DEBUG_PRINT("OLED:\n%s\n", buffer );
  
     ltime = now;
-    loopMQTT();
   }
   
   loopPOW();
+  loopMQTT();
   g_semp->loop();
 }

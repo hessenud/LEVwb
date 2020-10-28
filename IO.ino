@@ -1,7 +1,3 @@
-
-
-
-
 #define LED_TICKLEN 100  // ms Ticklen
 
   
@@ -17,10 +13,16 @@ void loopIO()
   buttonControl(); // Manual ctrl of relay
   loopTimeClk();
 
-  
-  if ( g_Morse.is_active() ) ledState = !g_Morse.tick();
-  else  ledState = !g_LED.tick();
-  if (_lastLed != ledState ) digitalWrite(ledPin, (_lastLed = ledState ) );
+//g_LED.tick();
+//g_Morse.tick();
+  {
+    if ( g_Morse.is_active() ) {
+      ledState = !g_Morse.tick();  
+    } else { 
+      ledState = !g_LED.tick();
+    } 
+  }
+  if (_lastLed != ledState ) digitalWrite(ledPin, LED_LEVEL(_lastLed = ledState ) );
   if (_lastRelay != relayState ) {
     digitalWrite(relayPin, (_lastRelay = relayState) );
   }
@@ -37,6 +39,6 @@ void setupIO()
   digitalWrite(relayPin, relayState );
   digitalWrite(ledPin,   ledState );
   
-  g_LED.setIdle( 0x101 );
+  g_LED.setIdle( 0x9 );
   
 }
