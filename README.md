@@ -2,7 +2,11 @@ LEVwb
 ------
 LEVwb is a alternative firmware for a Sonoff POW implementing a Charger (Wallbox) for Light Electric Vehicles (LEV).
 The LEVwb was born when i tried to connect my Twizy to a SMA HomeManager.
-This resulted in a [SEMP implementation for Arduino uSEMP](https://github.com/hessenud/uSEMP)  
+For simplicity reasons it started as an Arduino Sketch and resulted in a [SEMP implementation for Arduino uSEMP](https://github.com/hessenud/uSEMP)  
+
+Arduino ist _not_ suited for developing something much bigger as "Blink.ino" but... 
+...still it's easy for anybody to customize the code, what's really necessary as there is still no run-time-configuration implemented.
+So right now, there's only a statically compiled config thats done using Arduino (or alike) in the "_LEVwb.ino_"  file and then downloaded to the target.
 
 
 required Libraries
@@ -32,3 +36,4 @@ ToDo
 * Sonoff Pow Rev2 uses different power meter (CSE7766) -> config option
 * use OVMS to reduce max charging power according to power recommendations
 * use actual PV production for local planning ( Modbus support )
+* ...
