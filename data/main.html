@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <link rel="stylesheet" href="/style.css">
+
+
+<script>
+function doRequest(url, upd) {
+	//var pref = "http://192.168.178.35/"; url = pref + url;
+	fetch(url, {mode: 'no-cors'} )
+	  .then(function(response) {
+		  return response.json();
+	  })
+	  .then(function(resp){
+		  if (upd) upd(resp);  //updateProfiles(resp);
+	  })
+	  .catch(function(error) {
+	    console.log('Request failed', error)
+	  });
+}
+</script>
+<title>LEVwb Control</title>
+</head>
+<body onload="javascript:init()">
+	<span class="title">LEVwb Control</span>
+	<br>
+	<div class="directCtl">
+		<button id="On" onclick="switchCtl(1)">ON</button>
+		<button id="Off" onclick="switchCtl(0)">OFF</button>
+		<span id="switchState">__</span> <a href="chg.html"><button>ProgChg</button></a>
+	</div>
+
+	<div class="col3">
+		<label for="voltage">Voltage:</label> <br> <label for="PWR">Charging:</label>
+		<br> <label for="rqCharge">req. Charge:</label> <br> <label>
+			FinishBy: </label> <br>
+
+		<meter id="voltage" value="0" min="200" low="220" optimum="230"
+			high="240" max="250"> </meter>
+		<br>
+		<meter id="PWR" value="0" min="0" low="300" optimum="2000" high="2300"
+			max="2350"> </meter>
+		<br>
+		<meter id="rqCharge" value="0" min="0" optimum="3000" high="6000"
+			max="7000"> </meter>
+		<br> <span id="latestEnd">__:__</span><br>
+		<output id="outputV" for="voltage">232 V</output>
+		<br>
+		<output id="outputP" for="PWR">1982 W</output>
+		<br>
+		<output id="outputC" for="rqCharge">3100 Wh</output>
+		<br>
+	</div>
+
+	<div class="directCtl">
+		<button id="StdChg" onclick="chargeProfile('std')">StdChg</button>
+		<button id="QckChg" onclick="chargeProfile('qck')">QckChg</button>
+		<button id="Prof1" onclick="chargeProfile('2')">Prg2</button>
+		<button id="AbortCharge" onclick="chargeProfile('del')">Cancel</button>
+	</div>
+	<a href="cfg.html"><button>Configure...</button></a>
+
+</body>
+<script>
+  function switchCtl(s) {
+    var url = "ctl?" + ((s == 1) ? "on" : "off");
+    doRequest(url);
+  }
+  function getUpdate() {
+    doRequest("stat", updateValues );
+  }
+  function chargeProfile(p) {
+	doRequest( "ctl?chrgProfile="+p ) ; 
+	getUpdate();
+  }
+  
+  function reqCharge(req,opt,est_d,let_d,let) {
+    var rq =  "energy?plan=0&"
+        + "requested=" 
+          + req
+          + "&optional=" + opt
+          + "&start=" + ((est_d=="undefined") ? 0 : est_d )
+          + ( let ? ("&endTime=" + let) : ("&end=" + let_d));
+      doRequest( rq) ;
+  }
+
+  function updateValues(obj) {
+    document.getElementById("voltage").value = obj.voltage;
+    document.getElementById("PWR").value = obj.pwr;
+    document.getElementById("rqCharge").value = obj.rchg;
+    document.getElementById("outputV").value = obj.voltage + " V";
+    document.getElementById("outputP").value = obj.pwr + " W";
+    document.getElementById("outputC").value = obj.rchg + " Wh";
+
+    document.getElementById("switchState").innerHTML = obj.switchState;
+    document.getElementById("latestEnd").innerHTML = obj.latestEnd;
+  }
+
+  var socket;
+  function init() {
+   	socket = new WebSocket('ws://' + window.location.hostname + ':81/');
+    socket.onmessage = function(ev) {
+      updateValues(JSON.parse(ev.data));
+    }
+  }
+  getUpdate();
+</script>
+</html>

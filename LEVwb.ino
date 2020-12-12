@@ -1,7 +1,3 @@
-  
-#define WLAN_SSID "the ssid"
-#define WLAN_PASS "the password"
-
 #define DEV_BOARD     /////////<<<<<<< DEVELOPER Board Selection
 
 /****************************************************************/
@@ -10,6 +6,22 @@
 #include <uSEMP.h>
 #include <ArduinoOTA.h>
 #include <uHelper.h>
+#include <LittleFS.h>
+#include <ArduinoJson.h>
+#ifdef USE_ASYNC
+//# include <WiFiManager.h>
+#else
+# include <WiFiManager.h>
+#endif
+
+
+#ifdef INCLUDE_FALLBACK_INDEX_HTM
+#include "extras/index_htm.h"
+#endif
+
+const char* fsName = "LittleFS";
+FS* fileSystem = &LittleFS;
+LittleFSConfig fileSystemConfig = LittleFSConfig();
 unsigned long getTime();  // forward reference for definitions following in "later" TABs
 
 
@@ -25,11 +37,13 @@ unsigned long getTime();  // forward reference for definitions following in "lat
 #define str(s) #s
 #define xstr(xs) str(xs)
 
-#define DEBUG_SUPPORT         
+#define _DEBUG_SUPPORT         
 #ifdef DEBUG_SUPPORT
 # include "RemoteDebug.h"        //https://github.com/JoaoLopesF/RemoteDebug
   RemoteDebug Debug;
 # define DEBUG_PRINT(...) Debug.printf(__VA_ARGS__)
+#else
+   #include <WebSocketsServer.h>
 #endif
 
 #ifndef DEBUG_PRINT
@@ -47,8 +61,8 @@ unsigned long getTime();  // forward reference for definitions following in "lat
 # define DEV_EXT " CHG"
 # define HOSTNAME "DEVPOW_" DEV_NR 
 # define LED_LEVEL(l) (l)
-# define MQTTBROKER  "raspi"
-# define MQTTPORT    1883
+# define _MQTTBROKER  "raspi"
+# define _MQTTPORT    1883
 #else
 // the real deal
 # define LED_PIN 15
@@ -56,12 +70,12 @@ unsigned long getTime();  // forward reference for definitions following in "lat
 # define DEV_EXT
 # define DEV_BASENAME "TwizyPOW"
 # define HOSTNAME "TPOW_" DEV_NR 
-# define MQTTBROKER  "raspi"
-# define MQTTPORT    1883
+# define _MQTTBROKER  "raspi"
+# define _MQTTPORT    1883
 # define LED_LEVEL(l) (!(l))
 #endif
 
-#define TIMEZONE (+2*100)   /*MESZ / CEST +2 */  /*MEZ / CET +1*/
+#define TIMEZONE (+1*100)   /*MESZ / CEST +2 */  /*MEZ / CET +1*/
 
 #define DEV_NR xstr(DEV_IDX)
 #define DEVICE_SERIAL_NR    1
@@ -110,8 +124,14 @@ const int ledPin   = LED_PIN;
 const int relayPin  = 12;  // Sonoff 12
 const int buttonPin = 0;
 
-int ledState   = HIGH;
-int relayState = HIGH;
+#define RELAY_ON    LOW
+#define RELAY_OFF   HIGH
+#define LED_ON      LOW
+#define LED_OFF     HIGH
+
+
+int ledState   = LED_OFF;
+int relayState = RELAY_OFF;
 //----- POW ------
 unsigned pow_activePwr;
 unsigned pow_voltage;
@@ -143,8 +163,9 @@ char Vendor[] = VENDOR;
 
 
 #define SEMP_PORT 9980
-ESP8266WebServer http_server(80);
-ESP8266WebServer semp_server(SEMP_PORT);
+WebServer_T http_server(80);
+WebServer_T semp_server(SEMP_PORT);
+WebSocketsServer socket_server(81);
 
 #ifdef USE_POW
 # include "HLW8012.h"
@@ -152,8 +173,33 @@ ESP8266WebServer semp_server(SEMP_PORT);
 #endif
  
 uSEMP* g_semp;
-const char* ssid = WLAN_SSID; //replace "WLAN_SSID" with your WIFI's ssid
-const char* password = WLAN_PASS;  //replace "WLAN_PASS" with your WIFI's password
+bool fsOK;
+ 
+struct ChgProfile {
+  bool     timeOfDay;
+  unsigned est;
+  unsigned let;
+  unsigned req;
+  unsigned opt;
+  
+  char est_s[6+1];
+  char let_s[6+1];
+};
+
+enum {
+  PROFILE_STD=0,
+  PROFILE_QCK,
+  PROFILE_P2,
+  //--------------
+  N_CHRG_PROFILES
+};
+ChgProfile g_chgProfile[N_CHRG_PROFILES] = {
+  {true, 11 Hrs,15 Hrs, 3000, 6000,0,0},
+  {false, 0,0, 3000, 0,0,0},
+  {false, 0,3 Hrs, 4000, 6500,0,0}
+};
+
+unsigned assumed_power = MAX_CONSUMPTION;     ///< assumed power for calculations
 
 
 #ifdef USE_OLED
@@ -186,8 +232,16 @@ void setup() {
   g_semp = new uSEMP( udn_uuid, DeviceID, DeviceName, DeviceSerial, "EVCharger", Vendor, MAX_CONSUMPTION, getTime, setPwr, &semp_server, SEMP_PORT );
   Serial.printf_P(PSTR("uuid  : %s\n"), g_semp->udn_uuid());
   Serial.printf_P(PSTR("DevID : %s\n"), g_semp->deviceID());
-
   
+  
+  ////////////////////////////////
+  // FILESYSTEM INIT
+  DEBUG_PRINT("Initializing filesystem...\n");
+  fileSystemConfig.setAutoFormat(false);
+  fileSystem->setConfig(fileSystemConfig);
+  fsOK = fileSystem->begin();
+  DEBUG_PRINT(fsOK ? ("Filesystem initialized.\n") : ("Filesystem init failed!\n"));
+
   loadPrefs();
     
   setupOLED();
@@ -197,6 +251,7 @@ void setup() {
   setupIO();
   setupOTA(); 
   setupWebSrv();
+  setupFSbrowser();
   setupMQTT();
 
   setupDebug();
@@ -212,6 +267,8 @@ const char* state2txt( int state)
 {
   return state== HIGH ? "HIGH" : "LOW";
 }
+
+
 
 void loop() 
 {
@@ -238,6 +295,12 @@ void loop()
     DEBUG_PRINT("OLED:\n%s\n", buffer );
  
     ltime = now;
+
+    // socket_server.send
+    String st;
+    mkStat( st );
+    Serial.printf("STATUS: msg len:%u\n---------------------------\n%s\n--------------------------\n", st.length(), st.c_str() );
+    socket_server.broadcastTXT(st.c_str(), st.length());
   }
   
   loopPOW();

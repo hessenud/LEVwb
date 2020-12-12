@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <link rel="stylesheet" href="style.css">
+
+
+<script>
+function doRequest(url, upd) {
+	//var pref = "http://192.168.178.35/"; url = pref + url;
+	fetch(url, {mode: 'no-cors'} )
+	  .then(function(response) {
+		  return response.json();
+	  })
+	  .then(function(resp){
+		  if (upd) upd(resp);  //updateProfiles(resp);
+	  })
+	  .catch(function(error) {
+	    console.log('Request failed', error)
+	  });
+}
+</script>
+<title>LEVwb Config</title>
+</head>
+<body onload="javascript:init()">
+	<span class="title">LEVwb Configuration </span>
+	<div class="directCtl">
+		<a href="main.html"><button>MainCtrl</button></a>
+	</div>
+	<form >
+		Configuration <select id="devType">
+			<option>AirConditioning</option>
+			<option>ElectricVehicle</option>
+			<option>Charger</option>
+			<option>DishWasher</option>
+			<option>Dryer</option>
+			<option>EVCharger</option>
+			<option>Fridge</option>
+			<option>Heater</option>
+			<option>HeatPump</option>
+			<option>Motor</option>
+			<option>Pump</option>
+			<option>WashingMachine</option>
+			<option>Other</option>
+		</select> <br> <label> max. Pwr: <input id="maxPwr" type="number" value="2000"
+			step="100">
+		</label> <br> <label> <input type="checkbox" value="interuptible">
+			interuptible
+		</label> <br> <br>
+		
+		
+	</form>
+	<div class="directCtl">	<a href="main.html"> <button type="button" onclick="commitCfg()">Save</button></a></div>
+	<hr>
+	<form>
+	<label> exp.   Power: <input type="number" id="pwr"></label>
+	<label> exp. Voltage: <input type="number" id="volt"></label>
+	<label> exp. Current: <input type="number" id="current" step=".01" ></label>
+	</form>
+	
+	<button type="button" id="calibrate" onclick="calibrate()"> CALILBRATE!</button>	
+</body>
+<script>
+	function updateValues(obj) {
+		document.getElementById("devType").value = obj.devType;
+		document.getElementById("maxPwr").value = obj.maxPwr;
+		document.getElementById("intr").value = obj.intr;
+		document.getElementById("defCharge").value = obj.defCharge;
+	}
+	function calibrate() {
+		var pwr  = document.getElementById("pwr").value;
+  		var volt  = document.getElementById("volt").value;
+  		var current  = document.getElementById("current").value;
+  		doRequest( "calibrate?"
+					+"power=" + pwr 
+					+"&current=" + current
+					+"&voltage=" + volt );
+  		
+	}
+	function commitCfg() {
+		alert("CFG");
+	}
+
+	function init() {
+		document.getElementById("devType").value = "EVCharger";
+	}
+</script>
+</html>

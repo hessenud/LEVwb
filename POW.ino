@@ -141,16 +141,12 @@ void setupPOW() {
     pow_pwrMultiplier     = hlw8012.getPowerMultiplier();
     pow_currentMultiplier = hlw8012.getCurrentMultiplier();
     pow_voltageMultiplier = hlw8012.getVoltageMultiplier();
-//
+
     DEBUG_PRINT("\n[HLW] Default current multiplier : %f\n", pow_currentMultiplier);
     DEBUG_PRINT("\n[HLW] Default voltage multiplier : %f\n", pow_voltageMultiplier);
     DEBUG_PRINT("\n[HLW] Default power multiplier   : %f\n", pow_pwrMultiplier);
     DEBUG_PRINT("\n");
  
-    http_server.on("/pwr", HTTP_GET, handlePwrReq );
-    http_server.on("/calibrate", HTTP_GET, handleCalReq );
-    http_server.on("/energy", HTTP_GET, handleEnergyReq );
-
 #ifdef USE_POW_INT 
     setInterrupts();
 #endif
@@ -160,34 +156,18 @@ void setupPOW() {
     setPOWprefs(pow_prefs_pwrMultiplier, pow_prefs_currentMultiplier, pow_prefs_voltageMultiplier);  
 }
 
-unsigned timeStr2Value(  const char* i_ts)
-{
-  /* timestr    hh:mm  h:mm  hh:mm:ss
-   * split
-   */
-  unsigned timeval = 0;
-  unsigned n=0;
-  char* p = ( char*)i_ts;
-  char* str;
-  while ((str = strtok_r(p, ":", &p)))
-  {
-    int val = atoi(str);
-    switch(n)
-    {
-      case 0: timeval = val *3600;  break;
-      case 1: timeval += val *60;   break;
-      case 2: timeval += val;       break;
-      default:
-      Serial.printf(" Holy shit something went bonkers\n");
-    }
-    ++n;
-  }
-  
-  return timeval;  
-}
 
+
+unsigned calcOnTime( unsigned requestedEnergy, unsigned avr_pwr)
+{
+   return (Wh2Ws(requestedEnergy) / avr_pwr) // OnTime is in seconds => Wh2Ws
+   +180; // + 3 Minutes to give SEMP EM a bit time for planning an control
+}
+  
 void handleEnergyReq()
 {
+   DEBUG_PRINT("\n\n\n\n\n\n\n\nhandleEnergyReq\n\n\n\n\n\n" );
+   
   unsigned earliestStart = 0;
   unsigned latestStop    = 0; 
 
@@ -212,12 +192,16 @@ void handleEnergyReq()
     } else if (p1Name == String("end"))          { latestStop      = value + _now;
     } else if (p1Name == String("startTime"))    { earliestStart   = timeStr2Value(p1Val.c_str()) + dayoffset;
     } else if (p1Name == String("endTime"))      { latestStop      = timeStr2Value(p1Val.c_str()) + dayoffset;
+    } else if (p1Name == String("fastEnd"))      { latestStop      = _now +   calcOnTime(requestedEnergy, assumed_power );
     } else if (p1Name == String("plan"))         { planHandle      = atoi(p1Val.c_str()) ;
     } else {
     }
   }
   if ( earliestStart < _now ) {
     earliestStart += (1 DAY);
+    latestStop += (1 DAY);
+  }  
+  if ( latestStop < _now ) {
     latestStop += (1 DAY);
   }
   Serial.printf("POW now: %s EST: %s  LET: %s\n", String(TimeClk::getTimeString(_now)).c_str(), String(TimeClk::getTimeString(earliestStart)).c_str()
@@ -247,7 +231,7 @@ void handleEnergyReq()
   Serial.printf("response:\n%s\n",  buffer );
     
   DEBUG_PRINT("%s\n", buffer);
-  http_server.send(200, "text/plain", buffer);
+  handleStat();
   Serial.printf(" requested Energy end\n" );
     
 }
@@ -337,7 +321,6 @@ void handlePwrReq()
 #define Wh2Wms( e ) ((e)*3600*1000)
 
 void loopPOW() {
-   
     static unsigned long last;
     unsigned long now=millis();
     // This UPDATE_TIME should be at least twice the minimum time for the current or voltage
@@ -361,7 +344,7 @@ void loopPOW() {
         static unsigned hlw_vsim[] = {229, 230,231,235,232,228,227 };
            
 
-        pow_apparentPwr = pow_activePwr =  g_semp->pwrState() ? hlw_sim[(sim_rd)%DIM(hlw_sim)] : 0;
+        pow_apparentPwr = pow_activePwr =  relayState ? hlw_sim[(sim_rd)%DIM(hlw_sim)] : 0;
         pow_voltage =  hlw_vsim[(sim_rd)%DIM(hlw_vsim)];
         pow_current = (double)pow_activePwr / (double)pow_voltage;
         ++sim_rd;
@@ -459,6 +442,9 @@ void setPwr(bool i_state )
 {
   relayState = i_state;
 }
+
+
+
 
 
 #else

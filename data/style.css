@@ -1,0 +1,43 @@
+
+body {
+	font-size: 1.1em;
+	max-width: 320px;
+}
+
+.title {
+	font-size: 1.8em;
+	text-align: center;
+}
+.directCtl {
+    height: 2em;
+	font-size: 1em;
+	text-align: center;
+	color: white;
+	background-color: lightblue;
+	border-radius: 1em;
+	padding: 0.3em;
+}
+
+.footer {
+    font-size: 1em;
+	text-align: right;
+	color: white;
+	background-color: #c04020;
+	border-radius: 1em;
+	padding: 0.3em;
+}
+.col2 {
+	columns: 2;
+}
+
+.col3 {
+	columns: 3;
+}
+
+.col4 {
+	columns: 4;
+}
+input[type="number"],input[type="time"] {
+   width:60px;
+}
+button { height: 3em; border-radius: 2em; background-color: lightgrey; }

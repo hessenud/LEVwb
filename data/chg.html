@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <link rel="stylesheet" href="style.css">
+
+<script>
+function doRequest(url, upd) {
+	//var pref = "http://192.168.178.35/"; url = pref + url;
+	fetch(url, {mode: 'no-cors'} )
+	  .then(function(response) {
+		  return response.json();
+	  })
+	  .then(function(resp){
+		  if (upd) upd(resp);  //updateProfiles(resp);
+	  })
+	  .catch(function(error) {
+	    console.log('Request failed', error)
+	  });
+}
+</script>
+<title>LEVwb Charge</title>
+<style>
+input[type="number"],input[type="time"] {
+   width:80px;
+}
+button { height: 3em; border-radius: 2em; background-color: lightgrey; }
+</style>
+</head>
+<body onload="javascript:init()">
+	<span class="title">LEVwb Control</span>
+	<br>
+	<div class="directCtl">
+		<a href="main.html"><button>MainCtrl</button></a>
+	</div>
+
+	<hr>Charge: <input type="checkbox" id="ToD"> absolute
+	<div class="col2" id="request">
+		<label> Req:<input type="number" id="requested" step="500" value="0">	</label> <br>
+		<label>Start:<input type="time" id="startTime"></label><br>
+		<label> Opt:<input type="number" id="optional" step="500" value="0">  </label><br>
+		<label> End:<input type="time"	id="latestEnd"></label> <br><br>
+	</div>
+	<div class="directCtl">
+		<button id="commit" type="button" onclick="commitChg()">Charge</button>
+	</div>
+	
+	<hr>Std: <input type="checkbox" id="ToDStd"> absolute<br>	
+	<div class="col2" id="profileStd">
+	    <label>Req: <input type="number"  id="requestedStd" step="500" value="0"></label>  <br>
+		<label>Start:<input type="time"	  id="startTimeStd">	</label><br>
+		<label> Opt:<input	type="number" id="optionalStd" step="500" value="0"></label> <br>
+		<label > End:<input type="time"	  id="latestEndStd"> </label> <br>
+	</div>
+	<hr>Qck <input type="checkbox" id="ToDQck"> absolute<br>
+	<div class="col2" id="profileQck">
+		<label>  Req:<input type="number" id="requestedQck" step="500" value="0"> </label><br> 
+		<label>Start:<input type="time"   id="startTimeQck"> </label><br>
+		<label> Opt:<input	type="number" id="optionalQck" step="500" value="0"></label> <br>
+		<label > End:<input type="time"   id="latestEndQck"></label><br> 
+	</div>
+	<hr>Prg2:   <input type="checkbox" id="ToDP2"> absolute<br>
+	<div class="col2" id="profileProg2">
+		<label>  Req:<input type="number" id="requestedP2" step="500" value="0"> </label> <br>
+		<label>Start:<input type="time"   id="startTimeP2"> </label><br>
+		<label> Opt:<input	type="number" id="optionalP2" step="500" value="0"></label> <br>
+		<label > End:<input type="time"   id="latestEndP2">	</label> <br>
+	</div>	
+	<div class="footer">
+		<button  id="save" type="button" onclick="commitProfiles()">Save</button>
+	</div>
+
+</body>
+<script>
+function __doRequest(url, upd) {
+	var pref = "http://192.168.178.35/"; url = pref + url;
+	fetch(url, {mode: 'no-cors'} )
+	  .then(function(response) {
+		  return response.text();
+	  })
+	  .then(function(resp){
+		  // alert( resp );
+		  if (upd) upd(JSON.parse(resp));  //updateProfiles(resp);
+	  })
+	  .catch(function(error) {
+	    console.log('Request failed', error)
+	  });
+}
+	function reqCharge(req, opt, est, let, tod) {
+ 		var rq = "energy?plan=0&"
+         	+ "requested=" + req
+         	+ "&optional=" + opt
+         	+ (tod ? ("&startTime=" + ((est=="undefined") ? 0 : est )
+                 	 + ( let ? ("&endTime=" + let) : "&fastEnd"))
+                 	:
+                 	 ("&start=" + ((est=="undefined") ? 0 : est )
+                     + ( let ? ("&end=" + let) : "&fastEnd"))
+         			)
+         	;
+ 		doRequest( rq ) ;
+ 		
+ 		window.location.href = "main.html";
+ 	}
+	
+ 	function commitProf( pid, req, opt, est, let , tod){
+ 		//if (!tod) alert("reativePlan");
+ 		var rq = "setProfile?profile=" + pid
+        		+ "&requested="  + req
+          		+ "&optional=" + opt
+         	 	+ "&startTime=" + ((est=="undefined") ? 0 : est )
+         		+ "&endTime=" + ((let=="undefined") ? 0 : let )
+         		+ (tod ? "&ToD" : "")
+          			;
+  		doRequest( rq ) ;  
+ 	}
+ 	
+ 
+ 	
+ 	function commitChg() {
+ 		var req  = document.getElementById("requested").value;
+  		var opt  = document.getElementById("optional").value;
+  		var est  = document.getElementById("startTime").value;
+  		var let  = document.getElementById("latestEnd").value;
+  		var tod  = document.getElementById("ToD").checked;
+  	 	
+  		if ( let == "undefined" ) {  let = 0;}
+  		reqCharge( req, opt, est, let, tod );
+	}
+ 	
+
+	function updateProfiles(obj) {
+		document.getElementById("requestedStd").value = obj[0].req;
+		document.getElementById("optionalStd").value = obj[0].opt;
+		document.getElementById("startTimeStd").value = obj[0].est;
+		document.getElementById("latestEndStd").value = obj[0].let;
+		document.getElementById("ToDStd").checked = obj[0].timeOfDay;
+		
+    	document.getElementById("requestedQck").value = obj[1].req;
+		document.getElementById("optionalQck").value = obj[1].opt;
+		document.getElementById("startTimeQck").value = obj[1].est;
+		document.getElementById("latestEndQck").value = obj[1].let;
+		document.getElementById("ToDQck").checked = obj[1].timeOfDay;
+		
+    	document.getElementById("requestedP2").value = obj[2].req;
+		document.getElementById("optionalP2").value = obj[2].opt;
+		document.getElementById("startTimeP2").value = obj[2].est;
+		document.getElementById("latestEndP2").value = obj[2].let;
+		document.getElementById("ToDP2").checked = obj[2].timeOfDay;
+		
+	}
+	
+	function commitProfiles(){
+ 		var req  = document.getElementById("requestedStd").value;
+ 		var opt  = document.getElementById("optionalStd").value;
+ 		var est  = document.getElementById("startTimeStd").value;
+ 		var let  = document.getElementById("latestEndStd").value;
+ 		var tod  = document.getElementById("ToDStd").checked;
+ 		commitProf(0,req, opt, est, let, tod );
+
+ 		req  = document.getElementById("requestedQck").value;
+		opt  = document.getElementById("optionalQck").value;
+		est  = document.getElementById("startTimeQck").value;
+		let  = document.getElementById("latestEndQck").value;
+		tod  = document.getElementById("ToDQck").checked;
+  		commitProf(1,req, opt, est, let, tod );
+
+ 		req  = document.getElementById("requestedP2").value;
+		opt  = document.getElementById("optionalP2").value;
+		est  = document.getElementById("startTimeP2").value;
+		let  = document.getElementById("latestEndP2").value;
+		tod  = document.getElementById("ToDP2").checked;
+		commitProf(2,req, opt, est, let, tod );
+ 	}
+
+ 	function init() {
+		doRequest( "getProfiles", updateProfiles ) ; 
+	}
+
+</script>
+</html>

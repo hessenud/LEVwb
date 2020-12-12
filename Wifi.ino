@@ -21,53 +21,45 @@ String IpAddress2String(const IPAddress& ipAddress)
 /*********************************************************************
  * setup wifi
  */
-void setupWIFI()
-{
+
+#define USE_WIFIMANAGER
+void setupWIFI() {
+  // put your setup code here, to run once:
+#ifdef USE_WIFIMANAGER
+  
+  //WiFiManager
+  //Local intialization. Once its business is done, there is no need to keep it around
+  WiFiManager wifiManager;
+  //reset settings - for testing
+  // wifiManager.resetSettings();
+
+  //sets timeout until configuration portal gets turned off
+  //useful to make it all retry or go to sleep
+  //in seconds
+  wifiManager.setTimeout(180);
+  
+  //fetches ssid and pass and tries to connect
+  //if it does not connect it starts an access point with the specified name
+  //here  "AutoConnectAP"
+  //and goes into a blocking loop awaiting configuration
+  if(!wifiManager.autoConnect("LEVwbCfg","leviathan")) {
+    Serial.println("failed to connect and hit timeout");
+    delay(3000);
+    //reset and try again, or maybe put it to deep sleep
+    ESP.reset();
+    delay(5000);
+  } 
+#else
+ /* Connect WiFi */
+  WiFi.mode(WIFI_STA);
   WiFi.begin();
-  //
-  byte count = 0;
-  while(WiFi.status() != WL_CONNECTED && count < 50)
-  {
-    count ++;
-    delay(500);
-    Serial.print(".");
-    digitalWrite(ledPin, (ledState = !ledState));   // toggle the LED on (HIGH is the voltage level)
-  
+  if (WiFi.waitForConnectResult() != WL_CONNECTED) {
+      Serial.printf("WiFi Failed!\n");
+      return;
   }
-  
-  if(WiFi.status() == WL_CONNECTED) {
-    Serial.println("Connecting...OK."); 
-     digitalWrite(ledPin, HIGH);   // turn the LED on (HIGH is the voltage level)
-  } else {
-    Serial.println( "Connecting...Failed");
-    digitalWrite(ledPin, LOW);   // turn the LED on (HIGH is the voltage level)
-    Serial.printf("Connection Failed! setting WIFI parameters ssid: %s  pw: %s...\n", ssid, password);
- 
-   
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
-#if USE_STATIC_IP
-    WiFi.config(staticIP, gateway, subnet);
 #endif
-    count = 0;
-    while(WiFi.status() != WL_CONNECTED && count < 50)
-    {
-      count ++;
-      delay(500);
-      Serial.print(":");
-      digitalWrite(ledPin, (ledState = !ledState));   // toggle the LED on (HIGH is the voltage level)
-    }
-    if(WiFi.status() == WL_CONNECTED) {
-      Serial.println("Connecting 2...OK."); 
-       digitalWrite(ledPin, HIGH);   // turn the LED on (HIGH is the voltage level)
-    } else {
-      Serial.println("Connection 2 Failed! Rebooting...\n");
-      //savePrefs();
-      delay(5000);
-      ESP.restart(); 
-    }     // Register host name in WiFi and mDNS
-  }
-  
+  //if you get here you have connected to the WiFi
+  Serial.println("connected...yeey :)");
   String hostNameWifi = HOSTNAME;
   hostNameWifi.concat(".local");
   WiFi.hostname(hostNameWifi);
@@ -76,7 +68,7 @@ void setupWIFI()
       Serial.println( HOSTNAME) ;
   }
 }
-
+ 
 
 
 //---------------------------------

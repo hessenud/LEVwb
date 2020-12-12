@@ -1,42 +1,43 @@
+
+
+String unsupportedFiles = String();
+
+File uploadFile;
+
+static const char TEXT_PLAIN[] PROGMEM = "text/plain";
+static const char FS_INIT_ERROR[] PROGMEM = "FS INIT ERROR";
+static const char FILE_NOT_FOUND[] PROGMEM = "FileNotFound";
 void setupWebSrv()
 {
   if (WiFi.waitForConnectResult() == WL_CONNECTED) {
 
     Serial.printf("Starting HTTP...\n");
 
-     http_server.on("/", HTTP_GET, handlePwrReq);
+    http_server.on("/",     HTTP_GET, []() { handleFileRead("/main.html"); });
     
-    http_server.on("/index.html", HTTP_GET, []() {
-      http_server.send(200, "text/plain", "Hello User, this is POW!");
-    });
+    http_server.on("/on",   HTTP_GET, []() { relayState = HIGH; handleStat(); });
+    http_server.on("/off",  HTTP_GET, []() { relayState = LOW;  handleStat(); });
 
-    http_server.on(
-      "/on", HTTP_GET, []() {
-      http_server.send(200, "text/plain", "ON!");
-      relayState = HIGH;
-    });
-    http_server.on("/off", HTTP_GET, []() {
-      http_server.send(200, "text/plain", "OFF!");
-      relayState = LOW;
 
-    });
+    http_server.on("/pwr", HTTP_GET, handlePwrReq );
+    http_server.on("/calibrate", HTTP_GET, handleCalReq );
+    http_server.on("/energy", HTTP_GET, handleEnergyReq );
+
+
+    http_server.on("/stat",       HTTP_GET, handleStat );
+    http_server.on("/ctl",        HTTP_GET, handleCtl );
+    http_server.on("/setProfile", HTTP_GET, handleSetProfile );
+    http_server.on("/getProfiles",HTTP_GET, handleGetProfile );
     
-    http_server.on("/reload", HTTP_GET, []() {
-      loadPrefs();
-      http_server.send(200, "text/plain", "pref reloaded");
-    });
-    
-    http_server.on("/save", HTTP_GET, []() {
-      savePrefs();
-      http_server.send(200, "text/plain", "prefs saved!");
-    });
-    
-    http_server.on("/ctl", HTTP_GET, handleCtl );
-    http_server.on("/cfg", HTTP_GET, handleCfg );
+    http_server.on("/restart",    HTTP_GET, []() { ESP.reset();} );
+
+    http_server.on("/reload",     HTTP_GET, []() { loadPrefs(); http_server.send(200, "text/plain", "pref reloaded");  });
+    http_server.on("/save",       HTTP_GET, []() { savePrefs(); http_server.send(200, "text/plain", "prefs saved!");   });
+
     
     http_server.onNotFound ( handleNotFound );
     http_server.begin();
-
+    socket_server.begin();
   }
 }
 
@@ -45,10 +46,11 @@ void setupWebSrv()
 void loopWebSrv()
 {
   http_server.handleClient();
+  socket_server.loop();
 }
 
 void showRequest(unsigned i_retCode, String i_msg) {
-    String message = i_msg + "\n---------------------\n";
+  String message = i_msg + "\n---------------------\n";
   message += "URI: ";
   message += http_server.uri();
   message += "\nMethod: ";
@@ -65,32 +67,12 @@ void showRequest(unsigned i_retCode, String i_msg) {
 }
 
 
-void handleNotFound() 
-{
-  String message = "File Not Found\n\n";
-  message += "URI: ";
-  message += http_server.uri();
-  message += "\nMethod: ";
-  message += ( http_server.method() == HTTP_GET ) ? "GET" : "POST";
-  message += "\nArguments: ";
-  message += http_server.args();
-  message += "\n";
-
-  for ( int i = 0; i < http_server.args(); i++ ) {
-    message += " " + http_server.argName ( i ) + ": " + http_server.arg ( i ) + "\n";
-  }
-
-  DEBUG_PRINT("Web404: %s\n", message.c_str());
-  
-  http_server.send ( 404, "text/plain", message );
-}
-
 void handleCfg()
 {
   for ( int n = 0; n < http_server.args(); ++n) {
     String p1Name = http_server.argName(n);
     String p1Val = http_server.arg(n);
-   // float value = atof( p1Val.c_str() );
+    // float value = atof( p1Val.c_str() );
     DEBUG_PRINT("p%dName: %s  val: %s\n", n, p1Name.c_str(), p1Val.c_str() );
     if (p1Name == String("name")) {
       String theName = p1Val;
@@ -103,21 +85,676 @@ void handleCfg()
   http_server.send(404, "text/plain", "ERR");
 }
 
-void handleCtl()
+
+
+void handleAux()
 {
+
+  String resp = String("[HLW] Active Power (W)    : ") + String(pow_activePwr) +
+      String("\n[HLW] Voltage (V)         : ") + String(pow_voltage) +
+      String("\n[HLW] Current (A)         : ") + String(pow_current) +
+      "\n\n";
+
+  char buffer[resp.length() + 10*40];
+  unsigned wp = sprintf(buffer,"\n%s\n",resp.c_str());
+  g_semp->dumpPlans(&buffer[wp-1]);
+
+  DEBUG_PRINT("%s\n", buffer);
+  http_server.send(200, "text/plain", buffer);
+}
+
+
+void handleCtl() {
   for ( int n = 0; n < http_server.args(); ++n) {
-    String p1Name = http_server.argName(n);
-    String p1Val = http_server.arg(n);
+    String pName = http_server.argName(n);
+    String pVal = http_server.arg(n);
     //float value = atof( p1Val.c_str() );
-    DEBUG_PRINT("CTL p%dName: %s  val: %s\n", n, p1Name.c_str(), p1Val.c_str() );
-    if (p1Name == String("on")) {
+    DEBUG_PRINT("CTL p%dName: %s  val: %s\n", n, pName.c_str(), pVal.c_str() );
+    if (pName == String("on")) {
       relayState = HIGH;
-    } else if (p1Name == String("off")) {
+    } else if (pName == String("off")) {
       relayState = LOW;
+    } else if (pName == String("chrgProfile")) {
+      if (pVal == "std"){
+        requestProfile( 0 );
+      } else if (pVal == "qck"){
+        requestProfile( 1 );
+        g_semp->setPwrState( true );
+      } else if (pVal == "del"){
+        g_semp->resetPlan(0);
+        g_semp->setPwrState( false );
+      } else if (pVal == "delAll"){
+        g_semp->deleteAllPlans();
+        g_semp->setPwrState( false );
+      } else {
+        requestProfile( atoi(pVal.c_str())  );
+        
+      }
+    } else if (pName == String("stat")) {
     } else {
       http_server.send(404, "text/plain", "ERR");
       return;
     }
   }
-  http_server.send(200, "text/plain", relayState ? "on" : "off" + String(" -> OK"));
+  handleStat();
+}
+
+#define value2timeStr( vs )   (snprintf_P( (vs##_s), sizeof(vs##_s), PSTR("%2lu:%02lu"), (((vs)  % 86400L) / 3600), (((vs)  % 3600) / 60) ), (vs##_s))
+
+
+void handleGetProfile()
+{
+  const int capacity = JSON_ARRAY_SIZE(N_CHRG_PROFILES+1) + (N_CHRG_PROFILES+1)*JSON_OBJECT_SIZE(5); 
+  StaticJsonDocument<capacity> doc;
+  for (unsigned n=0; n < N_CHRG_PROFILES; ++n) {
+    doc[n]["timeOfDay"] = g_chgProfile[n].timeOfDay;
+   
+    doc[n]["est"] =  value2timeStr( g_chgProfile[n].est );
+    doc[n]["let"] =  value2timeStr( g_chgProfile[n].let );
+    Serial.printf("EST(%u): %u -> %s\n", n, g_chgProfile[n].est, g_chgProfile[n].est_s);
+    Serial.printf("LET(%u): %u -> %s\n", n, g_chgProfile[n].let, g_chgProfile[n].let_s);
+    doc[n]["req"] = g_chgProfile[n].req;
+    doc[n]["opt"] = g_chgProfile[n].opt;
+  }
+
+  String resp;
+  if (serializeJsonPretty(doc, resp) == 0) {
+    DEBUG_PRINT(PSTR("Failed to serialize"));
+  }
+  
+  DEBUG_PRINT(PSTR("Profiles: \n%s\n"), resp.c_str());
+  http_server.send(200, "text/plain", resp);
+}
+
+void handleSetProfile()
+{
+  unsigned earliestStart = 0;
+  unsigned latestStop    = 0; 
+
+  unsigned requestedEnergy = 0 KWh;
+  unsigned optionalEnergy  = 0 KWh;
+  bool     timeOfDay       = false;
+  
+  int prof_idx = -1; 
+  for( int n = 0; n < http_server.args(); ++n)
+  {
+    String pName = http_server.argName(n);
+    String pVal = http_server.arg(n);
+    int value= atoi( pVal.c_str() );
+ 
+    DEBUG_PRINT("p%dName: %s  val: %s\n",n, pName.c_str(), pVal.c_str() );
+   
+    if (pName == String("requested"))           { requestedEnergy = value;
+    } else if (pName == String("optional"))     { optionalEnergy  = value;
+    } else if (pName == String("startTime"))    { earliestStart   = timeStr2Value(pVal.c_str());
+    } else if (pName == String("endTime"))      { latestStop      = timeStr2Value(pVal.c_str());
+    } else if (pName == String("profile"))      { prof_idx        = value %N_CHRG_PROFILES;
+    } else if (pName == String("ToD"))          { timeOfDay       = true;
+    } else {
+    }
+  }
+
+  if ( prof_idx>=0)    g_chgProfile[prof_idx % N_CHRG_PROFILES] = { timeOfDay, earliestStart, latestStop, requestedEnergy, optionalEnergy, 0, 0};
+  
+
+  for(unsigned n=0;n < N_CHRG_PROFILES;++n){
+    Serial.printf("%s(%u) est: %u let: %u req:%u opt:%u\n", g_chgProfile[n % N_CHRG_PROFILES].timeOfDay ? "TimeOfDayPlan":"relativePlan"
+    , n, g_chgProfile[n % N_CHRG_PROFILES].est, g_chgProfile[n % N_CHRG_PROFILES].let
+    , g_chgProfile[n % N_CHRG_PROFILES].req, g_chgProfile[n % N_CHRG_PROFILES].opt);
+  }
+   http_server.send(200, "text/plain", "OK");
+}
+
+void requestProfile(unsigned i_profile)
+{
+  ChgProfile prof = g_chgProfile[i_profile % N_CHRG_PROFILES];
+    unsigned long _now = getTime();
+    //unsigned daytime = _now%(1 DAY);
+    unsigned long est = prof.est;
+    unsigned long let = prof.let;
+  
+    if (prof.timeOfDay) {
+      Serial.printf("TimeOfDayPlan: now: %u est: %u let: %u req:%u opt:%u\n", _now, est, let, prof.req, prof.opt);
+      est = TimeClk::daytime2unixtime( est, _now);
+      let = TimeClk::daytime2unixtime( let, _now); 
+    } else {
+      // relatve time
+      Serial.printf("RelativePlan: now: %u est: %u let: %u req:%u opt:%u\n", _now, est, let, prof.req, prof.opt);
+      if( let == 0){      //approximate end time = 
+        est = 0;
+        unsigned ereq = (prof.opt>0 ? prof.opt : prof.req);
+        let = calcOnTime( ereq, assumed_power);
+        Serial.printf("calc LET form req:%u at %uW)=> LET:%u\n",  ereq, assumed_power, let );
+      }
+      let += _now;
+      est += _now;
+    }
+    if ( est < _now ) {
+      Serial.printf(" est < now => add one day\n");
+      est += (1 DAY);
+      let += (1 DAY);
+    }  
+    if ( let < _now ) {
+      Serial.printf(" let < now => add one day\n");
+      let += (1 DAY);
+    }
+    Serial.printf("plan: now: %u est: %u let: %u req:%u opt:%u\n", _now, est, let, prof.req, prof.opt);
+    g_semp->modifyPlan(0, _now, prof.req, prof.opt, est, let );
+}
+
+void mkStat( String& resp) {
+  StaticJsonDocument<512> stat;
+  // Set the values in the document
+  stat["voltage"] = pow_voltage;
+  stat["pwr"] =  pow_activePwr;
+  
+  stat["current"] =    pow_current;
+  unsigned  req_chg= g_semp->getActivePlan() ? g_semp->getActivePlan()->m_requestedEnergy : 0;
+  stat["rchg"] =    req_chg;
+  stat["switchState"] =  relayState ? "ON" :"OFF" ;
+
+  long let = g_semp->getActivePlan() ? g_semp->getActivePlan()->m_latestEnd : 0;
+  stat["latestEnd"] = g_Clk.getTimeStringS( let );
+  // Serialize JSON
+  stat["ledState"]  = !ledState;  
+  stat["avrPwr"]    = pow_averagePwr;
+  stat["appPwr"]    = pow_apparentPwr;
+  stat["pwrFactor"] = pow_pwrFactor;
+  
+  if (serializeJson(stat, resp) == 0) {
+    DEBUG_PRINT(PSTR("Failed to serialize"));
+  }
+}
+
+void handleStat() {
+  //   String res = "{\"voltage":"pow_a","pwr":"350", "rchg":"345" })";
+  String resp;
+  mkStat( resp);
+  http_server.send(200, "text/plain", resp);
+}
+
+
+
+
+//-------------
+/*
+  FSBrowser - A web-based FileSystem Browser for ESP8266 filesystems
+
+  Copyright (c) 2015 Hristo Gochkov. All rights reserved.
+  This file is part of the ESP8266WebServer library for Arduino environment.
+
+  This library is free software; you can redistribute it and/or
+  modify it under the terms of the GNU Lesser General Public
+  License as published by the Free Software Foundation; either
+  version 2.1 of the License, or (at your option) any later version.
+
+  This library is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  Lesser General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public
+  License along with this library; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+  See readme.md for more information.
+*/
+
+////////////////////////////////
+// Uncomment the following line to embed a version of the web page in the code
+// (program code will be larger, but no file will have to be written to the filesystem).
+// Note: the source file "extras/index_htm.h" must have been generated by "extras/reduce_index.sh"
+
+//#define INCLUDE_FALLBACK_INDEX_HTM
+
+
+
+////////////////////////////////
+// Utils to return HTTP codes, and determine content-type
+
+void replyOK() {
+  http_server.send(200, FPSTR(TEXT_PLAIN), "");
+}
+
+void replyOKWithMsg(String msg) {
+  http_server.send(200, FPSTR(TEXT_PLAIN), msg);
+}
+
+void replyNotFound(String msg) {
+  http_server.send(404, FPSTR(TEXT_PLAIN), msg);
+}
+
+void replyBadRequest(String msg) {
+  DEBUG_PRINT(msg.c_str());
+  http_server.send(400, FPSTR(TEXT_PLAIN), msg + "\r\n");
+}
+
+void replyServerError(String msg) {
+  DEBUG_PRINT(msg.c_str());
+  http_server.send(500, FPSTR(TEXT_PLAIN), msg + "\r\n");
+}
+
+
+////////////////////////////////
+// Request handlers
+
+/*
+   Return the FS type, status and size info
+*/
+void handleStatus() {
+  DEBUG_PRINT("handleStatus");
+  FSInfo fs_info;
+  String json;
+  json.reserve(128);
+
+  json = "{\"type\":\"";
+  json += fsName;
+  json += "\", \"isOk\":";
+  if (fsOK) {
+    fileSystem->info(fs_info);
+    json += F("\"true\", \"totalBytes\":\"");
+    json += fs_info.totalBytes;
+    json += F("\", \"usedBytes\":\"");
+    json += fs_info.usedBytes;
+    json += "\"";
+  } else {
+    json += "\"false\"";
+  }
+  json += F(",\"unsupportedFiles\":\"");
+  json += unsupportedFiles;
+  json += "\"}";
+
+  http_server.send(200,"application/json", json);
+}
+
+
+/*
+   Return the list of files in the directory specified by the "dir" query string parameter.
+   Also demonstrates the use of chuncked responses.
+*/
+void handleFileList() {
+  if (!fsOK) {
+    return replyServerError(FPSTR(FS_INIT_ERROR));
+  }
+
+  if (!http_server.hasArg("dir")) {
+    return replyBadRequest(F("DIR ARG MISSING"));
+  }
+
+  String path = http_server.arg("dir");
+  if (path != "/" && !fileSystem->exists(path)) {
+    return replyBadRequest("BAD PATH");
+  }
+
+  DEBUG_PRINT("handleFileList: %s\n", path.c_str());
+  Dir dir = fileSystem->openDir(path);
+  path.clear();
+
+  // use HTTP/1.1 Chunked response to avoid building a huge temporary string
+  if (!http_server.chunkedResponseModeStart(200, "text/json")) {
+    http_server.send(505, F("text/html"), F("HTTP1.1 required"));
+    return;
+  }
+
+  // use the same string for every line
+  String output;
+  output.reserve(64);
+  while (dir.next()) {
+    if (output.length()) {
+      // send string from previous iteration
+      // as an HTTP chunk
+      http_server.sendContent(output);
+      output = ',';
+    } else {
+      output = '[';
+    }
+
+    output += "{\"type\":\"";
+    if (dir.isDirectory()) {
+      output += "dir";
+    } else {
+      output += F("file\",\"size\":\"");
+      output += dir.fileSize();
+    }
+
+    output += F("\",\"name\":\"");
+    // Always return names without leading "/"
+    if (dir.fileName()[0] == '/') {
+      output += &(dir.fileName()[1]);
+    } else {
+      output += dir.fileName();
+    }
+
+    output += "\"}";
+  }
+
+  // send last string
+  output += "]";
+  http_server.sendContent(output);
+  http_server.chunkedResponseFinalize();
+}
+
+
+/*
+   Read the given file from the filesystem and stream it back to the client
+*/
+bool handleFileRead(String path) {
+  DEBUG_PRINT("handleFileRead: %s\n", path.c_str());
+  if (!fsOK) {
+    replyServerError(FPSTR(FS_INIT_ERROR));
+    return true;
+  }
+
+  if (path.endsWith("/")) {
+    path += "index.htm";
+  }
+
+  String contentType;
+  if (http_server.hasArg("download")) {
+    contentType = F("application/octet-stream");
+  } else {
+    contentType = mime::getContentType(path);
+  }
+
+  if (!fileSystem->exists(path)) {
+    // File not found, try gzip version
+    path = path + ".gz";
+  }
+  if (fileSystem->exists(path)) {
+    File file = fileSystem->open(path, "r");
+    if (http_server.streamFile(file, contentType) != file.size()) {
+      DEBUG_PRINT("Sent less data than expected!\n");
+    }
+    file.close();
+    return true;
+  }
+
+  return false;
+}
+
+
+/*
+   As some FS (e.g. LittleFS) delete the parent folder when the last child has been removed,
+   return the path of the closest parent still existing
+*/
+String lastExistingParent(String path) {
+  while (!path.isEmpty() && !fileSystem->exists(path)) {
+    if (path.lastIndexOf('/') > 0) {
+      path = path.substring(0, path.lastIndexOf('/'));
+    } else {
+      path = String();  // No slash => the top folder does not exist
+    }
+  }
+  DEBUG_PRINT("Last existing parent: %s\n", path.c_str());
+  return path;
+}
+
+/*
+   Handle the creation/rename of a new file
+   Operation      | req.responseText
+   ---------------+--------------------------------------------------------------
+   Create file    | parent of created file
+   Create folder  | parent of created folder
+   Rename file    | parent of source file
+   Move file      | parent of source file, or remaining ancestor
+   Rename folder  | parent of source folder
+   Move folder    | parent of source folder, or remaining ancestor
+*/
+void handleFileCreate() {
+  if (!fsOK) {
+    return replyServerError(FPSTR(FS_INIT_ERROR));
+  }
+
+  String path = http_server.arg("path");
+  if (path.isEmpty()) {
+    return replyBadRequest(F("PATH ARG MISSING"));
+  }
+
+  if (path == "/") {
+    return replyBadRequest("BAD PATH");
+  }
+  if (fileSystem->exists(path)) {
+    return replyBadRequest(F("PATH FILE EXISTS"));
+  }
+
+  String src = http_server.arg("src");
+  if (src.isEmpty()) {
+    // No source specified: creation
+    DEBUG_PRINT("handleFileCreate: %s\n", path.c_str());
+    if (path.endsWith("/")) {
+      // Create a folder
+      path.remove(path.length() - 1);
+      if (!fileSystem->mkdir(path)) {
+        return replyServerError(F("MKDIR FAILED"));
+      }
+    } else {
+      // Create a file
+      File file = fileSystem->open(path, "w");
+      if (file) {
+        file.write((const char *)0);
+        file.close();
+      } else {
+        return replyServerError(F("CREATE FAILED"));
+      }
+    }
+    if (path.lastIndexOf('/') > -1) {
+      path = path.substring(0, path.lastIndexOf('/'));
+    }
+    replyOKWithMsg(path);
+  } else {
+    // Source specified: rename
+    if (src == "/") {
+      return replyBadRequest("BAD SRC");
+    }
+    if (!fileSystem->exists(src)) {
+      return replyBadRequest(F("SRC FILE NOT FOUND"));
+    }
+
+    DEBUG_PRINT("handleFileCreate: %s from %s\n", path.c_str() , src.c_str());
+
+    if (path.endsWith("/")) {
+      path.remove(path.length() - 1);
+    }
+    if (src.endsWith("/")) {
+      src.remove(src.length() - 1);
+    }
+    if (!fileSystem->rename(src, path)) {
+      return replyServerError(F("RENAME FAILED"));
+    }
+    replyOKWithMsg(lastExistingParent(src));
+  }
+}
+
+
+/*
+   Delete the file or folder designed by the given path.
+   If it's a file, delete it.
+   If it's a folder, delete all nested contents first then the folder itself
+
+   IMPORTANT NOTE: using recursion is generally not recommended on embedded devices and can lead to crashes (stack overflow errors).
+   This use is just for demonstration purpose, and FSBrowser might crash in case of deeply nested filesystems.
+   Please don't do this on a production system.
+*/
+void deleteRecursive(String path) {
+  File file = fileSystem->open(path, "r");
+  bool isDir = file.isDirectory();
+  file.close();
+
+  // If it's a plain file, delete it
+  if (!isDir) {
+    fileSystem->remove(path);
+    return;
+  }
+
+  // Otherwise delete its contents first
+  Dir dir = fileSystem->openDir(path);
+
+  while (dir.next()) {
+    deleteRecursive(path + '/' + dir.fileName());
+  }
+
+  // Then delete the folder itself
+  fileSystem->rmdir(path);
+}
+
+
+/*
+   Handle a file deletion request
+   Operation      | req.responseText
+   ---------------+--------------------------------------------------------------
+   Delete file    | parent of deleted file, or remaining ancestor
+   Delete folder  | parent of deleted folder, or remaining ancestor
+*/
+void handleFileDelete() {
+  if (!fsOK) {
+    return replyServerError(FPSTR(FS_INIT_ERROR));
+  }
+
+  String path = http_server.arg(0);
+  if (path.isEmpty() || path == "/") {
+    return replyBadRequest("BAD PATH");
+  }
+
+  DEBUG_PRINT("handleFileDelete: %s\n", path.c_str());
+  if (!fileSystem->exists(path)) {
+    return replyNotFound(FPSTR(FILE_NOT_FOUND));
+  }
+  deleteRecursive(path);
+
+  replyOKWithMsg(lastExistingParent(path));
+}
+
+/*
+   Handle a file upload request
+*/
+void handleFileUpload() {
+  if (!fsOK) {
+    return replyServerError(FPSTR(FS_INIT_ERROR));
+  }
+  if (http_server.uri() != "/edit") {
+    return;
+  }
+  HTTPUpload& upload = http_server.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    String filename = upload.filename;
+    // Make sure paths always start with "/"
+    if (!filename.startsWith("/")) {
+      filename = "/" + filename;
+    }
+    DEBUG_PRINT("handleFileUpload Name: %s\n", filename.c_str());
+    uploadFile = fileSystem->open(filename, "w");
+    if (!uploadFile) {
+      return replyServerError(F("CREATE FAILED"));
+    }
+    DEBUG_PRINT("Upload: START, filename:  %s\n", filename.c_str());
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (uploadFile) {
+      size_t bytesWritten = uploadFile.write(upload.buf, upload.currentSize);
+      if (bytesWritten != upload.currentSize) {
+        return replyServerError(F("WRITE FAILED"));
+      }
+    }
+    DEBUG_PRINT("Upload: WRITE, Bytes: %d\n", upload.currentSize);
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (uploadFile) {
+      uploadFile.close();
+    }
+    DEBUG_PRINT("Upload: END, Size: %d‘\n", upload.totalSize);
+  }
+}
+
+
+/*
+   The "Not Found" handler catches all URI not explicitely declared in code
+   First try to find and return the requested file from the filesystem,
+   and if it fails, return a 404 page with debug information
+*/
+void handleNotFound() {
+  if (!fsOK) {
+    return replyServerError(FPSTR(FS_INIT_ERROR));
+  }
+
+  String uri = ESP8266WebServer::urlDecode(http_server.uri()); // required to read paths with blanks
+
+  if (handleFileRead(uri)) {
+    return;
+  }
+
+  // Dump debug data
+  String message;
+  message.reserve(100);
+  message = F("Error: File not found\n\nURI: ");
+  message += uri;
+  message += ("\nMethod: ");
+  message += (http_server.method() == HTTP_GET) ? "GET" : "POST";
+  message += ("\nArguments: ");
+  message += http_server.args();
+  message += '\n';
+  for (uint8_t i = 0; i < http_server.args(); i++) {
+    message += (" NAME:");
+    message += http_server.argName(i);
+    message += ("\n VALUE:");
+    message += http_server.arg(i);
+    message += '\n';
+  }
+  message += "path=";
+  message += http_server.arg("path");
+  message += '\n';
+  DEBUG_PRINT(message.c_str());
+
+  return replyNotFound(message);
+}
+
+/*
+   This specific handler returns the index.htm (or a gzipped version) from the /edit folder.
+   If the file is not present but the flag INCLUDE_FALLBACK_INDEX_HTM has been set, falls back to the version
+   embedded in the program code.
+   Otherwise, fails with a 404 page with debug information
+*/
+void handleGetEdit() {
+  if (handleFileRead("/edit/index.htm")) {
+    return;
+  }
+
+#ifdef INCLUDE_FALLBACK_INDEX_HTM
+  http_server.sendHeader(F("Content-Encoding"), "gzip");
+  http_server.send(200, "text/html", index_htm_gz, index_htm_gz_len);
+#else
+  replyNotFound(FPSTR(FILE_NOT_FOUND));
+#endif
+
+}
+
+void setupFSbrowser(void) {
+
+ 
+  ////////////////////////////////
+  // WEB SERVER FS Part init
+  // format directory
+  http_server.on("/fmtfs", HTTP_GET, [](){ DEBUG_PRINT("formatting FS\n"); fileSystem->format();   replyOKWithMsg("Format Complete");});
+
+  // Filesystem status
+  http_server.on("/status", HTTP_GET, handleStatus);
+
+  // List directory
+  http_server.on("/list", HTTP_GET, handleFileList);
+
+  // Load editor
+  http_server.on("/edit", HTTP_GET, handleGetEdit);
+
+  // Create file
+  http_server.on("/edit",  HTTP_PUT, handleFileCreate);
+
+  // Delete file
+  http_server.on("/edit",  HTTP_DELETE, handleFileDelete);
+
+  // Upload file
+  // - first callback is called after the request has ended with all parsed arguments
+  // - second callback handles file upload at that location
+  http_server.on("/edit",  HTTP_POST, replyOK, handleFileUpload);
+
+  // Default handler for all URIs not defined above
+  // Use it to read files from filesystem
+  http_server.onNotFound(handleNotFound);
+
 }

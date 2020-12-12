@@ -22,6 +22,7 @@ void setupOTA() {
 
   ArduinoOTA.onStart([]() {
     String type;
+    fileSystem->end();
     if (ArduinoOTA.getCommand() == U_FLASH) {
       type = "sketch";
     } else { // U_SPIFFS

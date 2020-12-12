@@ -21,7 +21,6 @@ void buttonControl()
         break;
     case PushButton::DN_LONG2:
         DEBUG_PRINT(" Reset all plans %s\n", relayState ? "ON" :"OFF");
-        g_Morse.set(".....    .. ..");
         g_semp->deleteAllPlans( );
         g_LED.reset();
         break;
