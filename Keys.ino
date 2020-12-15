@@ -1,5 +1,5 @@
 //-------------------------------------
-PushButton key(buttonPin, 30, 3000, 8000, 300);
+PushButton key(g_pow.buttonPin, 30, 3000, 8000, 300);
 
 void buttonControl()
 {
@@ -15,17 +15,17 @@ void buttonControl()
         g_LED.set(5,4,true);
         break;
     case PushButton::CLICK:
-        relayState = !relayState;
-        DEBUG_PRINT(" Relay: %s\n", relayState ? "ON" :"OFF");
+        g_pow.toggleRelay();// relayState = !relayState;
+        DEBUG_PRINT(" Relay: %s\n", g_pow.relayState ? "ON" :"OFF");
         g_LED.reset();
         break;
     case PushButton::DN_LONG2:
-        DEBUG_PRINT(" Reset all plans %s\n", relayState ? "ON" :"OFF");
+        DEBUG_PRINT(" Reset all plans %s\n", g_pow.relayState ? "ON" :"OFF");
         g_semp->deleteAllPlans( );
         g_LED.reset();
         break;
             case PushButton::DN_LONG1:
-        DEBUG_PRINT(" Request 3KWh: %s\n", relayState ? "ON" :"OFF");
+        DEBUG_PRINT(" Request 3KWh: %s\n", g_pow.relayState ? "ON" :"OFF");
         g_Morse.set(".....    - - -");
         {
           unsigned long _now = getTime();
@@ -42,7 +42,7 @@ void buttonControl()
        // relayState = LOW;
         g_Morse.next(". - . - . - . - . -", true );
         g_LED.reset();
-        DEBUG_PRINT(" Doubleclick!!!: %s\n", relayState ? "ON" :"OFF");
+        DEBUG_PRINT(" Doubleclick!!!: %s\n", g_pow.relayState ? "ON" :"OFF");
         break;
   } 
 }

@@ -1,1 +1,12 @@
-// config
+{
+  "hostname": "myHostName",
+  "assumed_power": 2300,
+  "mqtt_broker": "raspi",
+  "mqtt_broker_port": 1883,
+  "mqtt_user": "tpow",
+  "mqtt_password": "tpowpw",
+  "device_name": "SimplePOW",
+  "model_name": "TPOW Dev",
+  "updateTime": 1000,
+  "modelVariant": 1
+}
