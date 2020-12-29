@@ -47,32 +47,34 @@ void setupWebSrv()
 {
     if (WiFi.waitForConnectResult() == WL_CONNECTED) {
 
-        Serial.printf("Starting HTTP...\n");
+        DEBUG_PRINT("Starting HTTP...\n");
 
         http_server.on("/",     HTTP_GET, []() { handleFileRead("/main.html"); });
 
-        http_server.on("/on",   HTTP_GET, []() { g_pow.setPwr(true);  handleStat(); });
-        http_server.on("/off",  HTTP_GET, []() { g_pow.setPwr(false); handleStat(); });
+        http_server.on("/on",   HTTP_GET, []() { g_pow->setPwr(true);  handleStat(); });
+        http_server.on("/off",  HTTP_GET, []() { g_pow->setPwr(false); handleStat(); });
 
-
-
-        http_server.on("/pwr", HTTP_GET,        mkDelegate( &g_pow, handlePwrReq) ); 
-        http_server.on("/calibrate", HTTP_GET,  mkDelegate( &g_pow, handleCalReq) ); 
-        http_server.on("/energy", HTTP_GET,     mkDelegate( &g_pow, handleEnergyReq));
-
+        http_server.on("/pwr", HTTP_GET,        mkDelegate( g_pow, handlePwrReq) ); 
+        http_server.on("/calibrate", HTTP_GET,  mkDelegate( g_pow, handleCalReq) ); 
+        http_server.on("/energy", HTTP_GET,     mkDelegate( g_pow, handleEnergyReq));
+        http_server.on("/timer", HTTP_GET,      mkDelegate( g_pow, handleTimeReq));
 
         http_server.on("/stat",       HTTP_GET, handleStat );
         http_server.on("/ctl",        HTTP_GET, handleCtl );
         http_server.on("/setProfile", HTTP_GET, handleSetProfile );
         http_server.on("/getProfiles",HTTP_GET, handleGetProfile );
 
-        http_server.on("/restart",    HTTP_GET, []() { ESP.reset();} );
+        http_server.on("/restart",    HTTP_GET, []() { 
+            fileSystem->end();
+            ESP.reset();}
+        );
 
         http_server.on("/reload",     HTTP_GET, []() { loadPrefs(); replyOKWithMsg("pref reloaded");  });
         http_server.on("/save",       HTTP_GET, []() { savePrefs(); replyOKWithMsg("prefs saved!");   });
 
 
-        http_server.onNotFound ( handleNotFound );
+        setupFSbrowser();
+
         http_server.begin();
         socket_server.begin();
     }
@@ -104,6 +106,7 @@ void showRequest(unsigned i_retCode, String i_msg) {
 }
 
 
+///@todo
 void handleCfg()
 {
     for ( int n = 0; n < http_server.args(); ++n) {
@@ -127,9 +130,9 @@ void handleCfg()
 void handleAux()
 {
 
-    String resp = String("[HLW] Active Power (W)    : ") + String(g_pow.activePwr) +
-            String("\n[HLW] Voltage (V)         : ") + String(g_pow.voltage) +
-            String("\n[HLW] Current (A)         : ") + String(g_pow.current) +
+    String resp = String("[HLW] Active Power (W)    : ") + String(g_pow->activePwr) +
+            String("\n[HLW] Voltage (V)         : ") + String(g_pow->voltage) +
+            String("\n[HLW] Current (A)         : ") + String(g_pow->current) +
             "\n\n";
 
     char buffer[resp.length() + 10*40];
@@ -148,9 +151,9 @@ void handleCtl() {
         //float value = atof( p1Val.c_str() );
         DEBUG_PRINT("CTL p%dName: %s  val: %s\n", n, pName.c_str(), pVal.c_str() );
         if (pName == String("on")) {
-            g_pow.setPwr(true);
+            g_pow->setPwr(true);
         } else if (pName == String("off")) {
-            g_pow.setPwr(false);
+            g_pow->setPwr(false);
         } else if (pName == String("chrgProfile")) {
             if (pVal == "std"){
                 requestProfile( 0 );
@@ -178,7 +181,6 @@ void handleCtl() {
 
 #define value2timeStr( vs )   (snprintf_P( (vs##_s), sizeof(vs##_s), PSTR("%2lu:%02lu"), (((vs)  % 86400L) / 3600), (((vs)  % 3600) / 60) ), (vs##_s))
 
-
 void handleGetProfile()
 {
     const int capacity = JSON_ARRAY_SIZE(N_CHRG_PROFILES+1) + (N_CHRG_PROFILES+1)*JSON_OBJECT_SIZE(5);
@@ -188,8 +190,8 @@ void handleGetProfile()
 
         doc[n]["est"] =  value2timeStr( g_prefs.chgProfile[n].est );
         doc[n]["let"] =  value2timeStr( g_prefs.chgProfile[n].let );
-        Serial.printf("EST(%u): %u -> %s\n", n, g_prefs.chgProfile[n].est, g_prefs.chgProfile[n].est_s);
-        Serial.printf("LET(%u): %u -> %s\n", n, g_prefs.chgProfile[n].let, g_prefs.chgProfile[n].let_s);
+        DEBUG_PRINT("EST(%u): %u -> %s\n", n, g_prefs.chgProfile[n].est, g_prefs.chgProfile[n].est_s);
+        DEBUG_PRINT("LET(%u): %u -> %s\n", n, g_prefs.chgProfile[n].let, g_prefs.chgProfile[n].let_s);
         doc[n]["req"] = g_prefs.chgProfile[n].req;
         doc[n]["opt"] = g_prefs.chgProfile[n].opt;
     }
@@ -234,7 +236,7 @@ void handleSetProfile()
     if ( prof_idx>=0)    g_prefs.chgProfile[prof_idx % N_CHRG_PROFILES] = { timeOfDay, earliestStart, latestStop, requestedEnergy, optionalEnergy,{'\0'},{'\0'} };
 
     for(unsigned n=0;n < N_CHRG_PROFILES;++n){
-        Serial.printf("%s(%u) est: %u let: %u req:%u opt:%u\n", g_prefs.chgProfile[n % N_CHRG_PROFILES].timeOfDay ? "TimeOfDayPlan":"relativePlan"
+        DEBUG_PRINT("%s(%u) est: %u let: %u req:%u opt:%u\n", g_prefs.chgProfile[n % N_CHRG_PROFILES].timeOfDay ? "TimeOfDayPlan":"relativePlan"
                 , n, g_prefs.chgProfile[n % N_CHRG_PROFILES].est, g_prefs.chgProfile[n % N_CHRG_PROFILES].let
                 , g_prefs.chgProfile[n % N_CHRG_PROFILES].req, g_prefs.chgProfile[n % N_CHRG_PROFILES].opt);
     }
@@ -250,52 +252,52 @@ void requestProfile(unsigned i_profile)
     unsigned long let = prof.let;
 
     if (prof.timeOfDay) {
-        Serial.printf("TimeOfDayPlan: now: %lu est: %lu let: %lu req:%u opt:%u\n", _now, est, let, prof.req, prof.opt);
+        DEBUG_PRINT("TimeOfDayPlan: now: %lu est: %lu let: %lu req:%u opt:%u\n", _now, est, let, prof.req, prof.opt);
         est = TimeClk::daytime2unixtime( est, _now);
         let = TimeClk::daytime2unixtime( let, _now);
     } else {
         // relatve time
-        Serial.printf("RelativePlan: now: %lu est: %lu let: %lu req:%u opt:%u\n", _now, est, let, prof.req, prof.opt);
+        DEBUG_PRINT("RelativePlan: now: %lu est: %lu let: %lu req:%u opt:%u\n", _now, est, let, prof.req, prof.opt);
         if( let == 0){      //approximate end time =
             est = 0;
             unsigned ereq = (prof.opt>0 ? prof.opt : prof.req);
-            let = g_pow.calcOnTime( ereq, g_prefs.assumed_power);
-            Serial.printf("calc LET form req:%u at %uW)=> LET:%lu\n",  ereq, g_prefs.assumed_power, let );
+            let = g_pow->calcOnTime( ereq, g_prefs.assumed_power);
+            DEBUG_PRINT("calc LET form req:%u at %uW)=> LET:%lu\n",  ereq, g_prefs.assumed_power, let );
         }
         let += _now;
         est += _now;
     }
     if ( est < _now ) {
-        Serial.printf(" est < now => add one day\n");
+        DEBUG_PRINT(" est < now => add one day\n");
         est += (1 DAY);
         let += (1 DAY);
     }
     if ( let < _now ) {
-        Serial.printf(" let < now => add one day\n");
+        DEBUG_PRINT(" let < now => add one day\n");
         let += (1 DAY);
     }
-    Serial.printf("plan: now: %lu est: %lu let: %lu req:%u opt:%u\n", _now, est, let, prof.req, prof.opt);
+    DEBUG_PRINT("plan: now: %lu est: %lu let: %lu req:%u opt:%u\n", _now, est, let, prof.req, prof.opt);
     g_semp->modifyPlan(0, _now, prof.req, prof.opt, est, let );
 }
 
 void mkStat( String& resp) {
     StaticJsonDocument<512> stat;
     // Set the values in the document
-    stat["voltage"] = g_pow.voltage;
-    stat["pwr"] =  g_pow.activePwr;
+    stat["voltage"] = g_pow->voltage;
+    stat["pwr"] =  g_pow->activePwr;
 
-    stat["current"] =    g_pow.current;
+    stat["current"] =    g_pow->current;
     unsigned  req_chg= g_semp->getActivePlan() ? g_semp->getActivePlan()->m_requestedEnergy : 0;
     stat["rchg"] =    req_chg;
-    stat["switchState"] =  g_pow.relayState ? "ON" :"OFF" ;
+    stat["switchState"] =  g_pow->relayState ? "ON" :"OFF" ;
 
     long let = g_semp->getActivePlan() ? g_semp->getActivePlan()->m_latestEnd : 0;
     stat["latestEnd"] = g_Clk.getTimeStringS( let );
     // Serialize JSON
-    stat["ledState"]  = !g_pow.ledState;
-    stat["avrPwr"]    = g_pow.averagePwr;
-    stat["appPwr"]    = g_pow.apparentPwr;
-    stat["pwrFactor"] = g_pow.pwrFactor;
+    stat["ledState"]  = !g_pow->ledState;
+    stat["avrPwr"]    = g_pow->averagePwr;
+    stat["appPwr"]    = g_pow->apparentPwr;
+    stat["pwrFactor"] = g_pow->pwrFactor;
 
     if (serializeJson(stat, resp) == 0) {
         DEBUG_PRINT(PSTR("Failed to serialize"));

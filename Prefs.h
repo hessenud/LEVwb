@@ -6,9 +6,13 @@
 #ifndef PREFS_H_
 #define PREFS_H_
 
+#define  N_PREFS 18
+#define  PREFS_REVISION 2
 class Prefs {
 public:
+    unsigned    revision; 
     const char* hostname;
+    const char* ota_passwd;
     unsigned    assumed_power;      ///< assumed consumption for time calculation
     const char* mqtt_broker;        ///< hostname of mqtt broker
     unsigned    mqtt_broker_port;   ///< port of mqtt broker
@@ -35,11 +39,13 @@ public:
 
     bool        loaded;
 
-#define N_PREFS 14   +2
-    static const int capacity =   (N_PREFS)*JSON_OBJECT_SIZE(1); // JSON_ARRAY_SIZE(N_CHRG_PROFILES) +  (N_CHRG_PROFILES)*JSON_OBJECT_SIZE(1)
+    static const int capacity =   JSON_OBJECT_SIZE(N_PREFS) +  JSON_ARRAY_SIZE(N_CHRG_PROFILES) +  (N_CHRG_PROFILES)*JSON_OBJECT_SIZE(7);
 
 };
 
+#define storePref( __prf )  cfg[ #__prf ]= g_prefs.__prf 
+#define loadPref( __prf )     g_prefs.__prf=(cfg[ #__prf ])
+#define loadPrefStr( __prf )  g_prefs.__prf=storeString(cfg[ #__prf ])
 
 
 

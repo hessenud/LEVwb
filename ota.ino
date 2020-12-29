@@ -2,6 +2,7 @@
 
 void loopOTA() {
   ArduinoOTA.handle();
+  
 }
 
 
@@ -11,10 +12,11 @@ void setupOTA() {
   // ArduinoOTA.setPort(8266);
 
   // Hostname defaults to esp8266-[ChipID]
-  // ArduinoOTA.setHostname("POW1");
+  // ArduinoOTA.setHostname( "DevBoard" );
+  ArduinoOTA.setHostname( g_prefs.hostname );
 
   // No authentication by default
-  // ArduinoOTA.setPassword("admin");
+  // ArduinoOTA.setPassword( g_prefs.ota_passwd );
 
   // Password can be set with it's md5 value as well
   // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
@@ -22,7 +24,6 @@ void setupOTA() {
 
   ArduinoOTA.onStart([]() {
     String type;
-    fileSystem->end();
     if (ArduinoOTA.getCommand() == U_FLASH) {
       type = "sketch";
     } else { // U_SPIFFS
@@ -30,26 +31,29 @@ void setupOTA() {
     }
 
     // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
-    Serial.println("Start updating " + type);
+    DEBUG_PRINT("Start updating ");
+    DEBUG_PRINT(type.c_str());
+    DEBUG_PRINT("\n");
+    fileSystem->end();
   });
   ArduinoOTA.onEnd([]() {
-    Serial.println("\nEnd");
+    DEBUG_PRINT("\nEnd\n");
   });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    DEBUG_PRINT("Progress: %u%%\r", (progress / (total / 100)));
   });
   ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
+    DEBUG_PRINT("Error[%u]: ", error);
     if (error == OTA_AUTH_ERROR) {
-      Serial.println("Auth Failed");
+      DEBUG_PRINT("Auth Failed\n");
     } else if (error == OTA_BEGIN_ERROR) {
-      Serial.println("Begin Failed");
+      DEBUG_PRINT("Begin Failed\n");
     } else if (error == OTA_CONNECT_ERROR) {
-      Serial.println("Connect Failed");
+      DEBUG_PRINT("Connect Failed\n");
     } else if (error == OTA_RECEIVE_ERROR) {
-      Serial.println("Receive Failed");
+      DEBUG_PRINT("Receive Failed\n");
     } else if (error == OTA_END_ERROR) {
-      Serial.println("End Failed");
+      DEBUG_PRINT("End Failed\n");
     }
   });
   ArduinoOTA.begin();

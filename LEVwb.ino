@@ -1,33 +1,24 @@
-#define _DEV_BOARD     /////////<<<<<<< DEVELOPER Board Selection  set befor inlcudes!!
+ #define _DEV_BOARD     /////////<<<<<<< DEVELOPER Board Selection  set befor inlcudes!!
 
 //-----------------------------------------------------------------
 //--- Configuration -----------------------------------------------
 //-----------------------------------------------------------------
 
-#define USE_SSDP
-#define USE_POW
-#define _USE_POW_DBG
-#define USE_POW_INT
-
 #define str(s) #s
 #define xstr(xs) str(xs)
 
-#define __DEBUG_SUPPORT         
+#define DEBUG_SUPPORT
 #ifdef DEBUG_SUPPORT
-
-#include <WebSocketsServer.h>
+# define USE_LIB_WEBSOCKET true
 # include "RemoteDebug.h"        //https://github.com/JoaoLopesF/RemoteDebug
 RemoteDebug Debug;
 # define DEBUG_PRINT(...) Debug.printf(__VA_ARGS__)
-#else
-#include <WebSocketsServer.h>
 #endif
 
 #ifndef DEBUG_PRINT
-#define DEBUG_PRINT(...) Serial.printf(__VA_ARGS__)
+# define DEBUG_PRINT(...) // Serial.printf(__VA_ARGS__)
 #endif
 #define _DEBUG_PRINT(...)
-
 
 #ifdef DEV_BOARD
 # define DEV_IDX 2
@@ -41,9 +32,9 @@ RemoteDebug Debug;
 # define MQTTPORT    1883
 #else
 // the real deal
-# define DEV_IDX 1
+# define DEV_IDX 2
 # define DEV_EXT
-# define DEV_BASENAME "TwizyPOW"
+# define DEV_BASENAME "ThePOW"
 # define HOSTNAME "TPOW_" DEV_NR 
 # define MQTTBROKER  "raspi"
 # define MQTTPORT    1883
@@ -64,6 +55,7 @@ RemoteDebug Debug;
 #endif
 
 
+#include <WebSocketsServer.h>
 //local modules include
 #include "POW.h"
 #include "MQTT.h"
@@ -73,6 +65,7 @@ RemoteDebug Debug;
 const char* fsName = "LittleFS";
 FS* fileSystem = &LittleFS;
 LittleFSConfig fileSystemConfig = LittleFSConfig();
+bool fsOK;
 unsigned long getTime();  // forward reference for definitions following in "later" TABs
 
 
@@ -92,8 +85,6 @@ unsigned long getTime();  // forward reference for definitions following in "lat
 #define SERIAL_BAUDRATE       115200
 
 /*--------helper macros -----------*/
-#define DIM(a) (sizeof(a)/sizeof(a[0]))
-
 
 #define _SCL    // HLW CF
 #define _PWM1   // HLW CF1
@@ -110,8 +101,8 @@ unsigned long getTime();  // forward reference for definitions following in "lat
 
 Prefs g_prefs;
 //----- POW ------
-POW g_pow;
 
+POW* g_pow;
 //----- PLAN  -----
 
 
@@ -129,9 +120,7 @@ WebServer_T http_server(80);
 WebServer_T semp_server(SEMP_PORT);
 WebSocketsServer socket_server(81);
 
-
 uSEMP* g_semp;
-bool fsOK;
 PowMqtt g_mqtt;
 
 
@@ -159,47 +148,54 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 
 void setup() {
-    Serial.begin(SERIAL_BAUDRATE );
-
-    snprintf_P( ChipID, sizeof(ChipID), PSTR("%08x"), ESP.getChipId() );
-    snprintf_P( udn_uuid, sizeof(udn_uuid), PSTR("f1d67bee-2a4e-d608-ffff-affe%08x"), ESP.getChipId() );
-    snprintf_P( DeviceID , sizeof(DeviceID), PSTR("F-05161968-0000%08x-00"), ESP.getChipId() );
-    snprintf_P( DeviceSerial , sizeof(DeviceSerial), PSTR("%04d"), DEVICE_SERIAL_NR );
-    Serial.printf_P(PSTR("ChipID: %s\n"), ChipID);
-
-
-    g_semp = new uSEMP( udn_uuid, DeviceID, DeviceName, DeviceSerial, "EVCharger", Vendor, MAX_CONSUMPTION, getTime
-            , ([](bool s) { g_pow.setPwr(s); })
-            , &semp_server, SEMP_PORT );
-    Serial.printf_P(PSTR("uuid  : %s\n"), g_semp->udn_uuid());
-    Serial.printf_P(PSTR("DevID : %s\n"), g_semp->deviceID());
-
-
+    // Serial.begin(115200);
+   
     ////////////////////////////////
     // FILESYSTEM INIT
     DEBUG_PRINT("Initializing filesystem...\n");
     fileSystemConfig.setAutoFormat(false);
     fileSystem->setConfig(fileSystemConfig);
+    
     fsOK = fileSystem->begin();
     DEBUG_PRINT(fsOK ? ("Filesystem initialized.\n") : ("Filesystem init failed!\n"));
-
+ 
     loadPrefs();
+      
+    ///////////////////////////////
+    // SEMP init
+    snprintf_P( ChipID, sizeof(ChipID), PSTR("%08x"), ESP.getChipId() );
+    snprintf_P( udn_uuid, sizeof(udn_uuid), PSTR("f1d67bee-2a4e-d608-ffff-affe%08x"), ESP.getChipId() );
+    snprintf_P( DeviceID , sizeof(DeviceID), PSTR("F-05161968-0000%08x-00"), ESP.getChipId() );
+    snprintf_P( DeviceSerial , sizeof(DeviceSerial), PSTR("%04d"), DEVICE_SERIAL_NR );
+    //Serial.printf_P(PSTR("ChipID: %s\n"), ChipID);
 
+
+    g_semp = new uSEMP( udn_uuid, DeviceID, DeviceName, DeviceSerial, "EVCharger", Vendor, g_prefs.maxPwr, &semp_server, SEMP_PORT );
+    g_pow = newPOW( g_prefs.modelVariant, g_semp );
+    g_semp->setCallbacks( getTime, ([](bool s) {  g_pow->setPwr(s);  }));
+  
+
+    ///////////////////////////////
+    // 
+    
     setupOLED();
     setupWIFI();
-    g_pow.setup(g_semp);
+
     setupTimeClk( TIMEZONE );
+  
     setupIO();
-    setupOTA();
     setupWebSrv();
-    setupFSbrowser();
-#ifdef MQTTBROKER
-    g_mqtt.setup(HOSTNAME, MQTTBROKER, MQTTPORT, &g_pow );
-#endif
+
+
+    if ( g_prefs.mqtt_broker_port )
+        g_mqtt.setup(g_prefs.hostname,   g_prefs.mqtt_broker, g_prefs.mqtt_broker_port, g_pow );
+
     setupDebug();
     setupSSDP();
-
-    requestDailyPlan(false);
+    setupOTA();
+    
+    // requestDailyPlan(false);
+    
 }
 
 
@@ -209,6 +205,7 @@ const char* state2txt( int state)
 {
     return state== HIGH ? "HIGH" : "LOW";
 }
+
 
 
 
@@ -227,13 +224,13 @@ void loop()
     loopWebSrv();
     loopDebug();
     unsigned long now = getTime();
-    char buffer[10*40];
+    char buffer[20*40];
     char* wp = &buffer[0];
 
     g_semp->dumpPlans( wp ) ;
     draw( buffer );
     if ( now - ltime > 5  ) {
-        DEBUG_PRINT("LED: %s  Relay: %s\n", state2txt(!g_pow.ledState), state2txt( !g_pow.relayState) );
+        if (g_pow)  DEBUG_PRINT("LED: %s  Relay: %s\n", state2txt(!g_pow->ledState), state2txt( !g_pow->relayState) );
         DEBUG_PRINT("OLED:\n%s\n", buffer );
 
         ltime = now;
@@ -241,26 +238,19 @@ void loop()
         // socket_server.send
         String st;
         mkStat( st );
-        Serial.printf("STATUS: msg len:%u\n---------------------------\n%s\n--------------------------\n", st.length(), st.c_str() );
+        DEBUG_PRINT("STATUS: msg len:%u\n---------------------------\n%s\n--------------------------\n", st.length(), st.c_str());
         socket_server.broadcastTXT(st.c_str(), st.length());
     }
-
-    g_pow.loop();
-    g_mqtt.loop();
-    g_semp->loop();
+       
+   if (g_pow) g_pow->loop();
+   g_mqtt.loop();
+   g_semp->loop();
 }
 
 
 ///-------------------------------------------------------
 /// Debugging --------------------------------------------
 ///-------------------------------------------------------
-
-void loopDebug()
-{
-#ifdef DEBUG_SUPPORT
-  Debug.handle(); // Remote debug over telnet 
-#endif
-}
 
 void setupDebug()
 {
@@ -269,7 +259,7 @@ void setupDebug()
     MDNS.addService("telnet", "tcp", 23);
     // Initialize the telnet server of RemoteDebug
 
-    Debug.begin(HOSTNAME); // Initiaze the telnet server
+    Debug.begin(g_prefs.hostname); // Initiaze the telnet server
     Debug.setResetCmdEnabled(true); // Enable the reset command
 
     Serial.println("* Arduino RemoteDebug Library");
@@ -278,5 +268,12 @@ void setupDebug()
     Serial.print("* WiFI connected. IP address: ");
     Serial.println(WiFi.localIP());
     delay(500);
+#endif
+}
+
+void loopDebug()
+{
+#ifdef DEBUG_SUPPORT
+  Debug.handle(); // Remote debug over telnet 
 #endif
 }

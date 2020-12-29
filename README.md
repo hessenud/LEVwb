@@ -21,19 +21,21 @@ Calibration of the power meter is in EEPROM but all the other config and the gui
 * [uSEMP](https://github.com/hessenud/uSEMP)                    --  the SEMP protocol to connect to SMA energy manager
 * [uHelper](https://github.com/hessenud/uHelper)                --    several small helper bits
 * ESP8266 Board support --  SSDP / WebServer / WiFi / mDNS .... all the good stuff theat comes with the core
-* EEPROM                   --  will be replaced by littleFS as configuration will become larger
+* EEPROM                --  Calibration 
+* LittleFS				--  Configuration / Webserver 
 * ArduinoJSON			--
 * WiFiManager			--  Captive Portal WIFI Configuration
+* WebSocketsServer		--
 * ArduinoOTA            --  SW Update Over-The-Air as the Hardware should be inside a wheater-proof housing
 
 ####optional
-* RemoteDebug        	-- if REMOTE_DEBUG   works only with patches when used with WifiManager I will integrate a variant in uHelper
+* RemoteDebug        	-- if REMOTE_DEBUG works only with patches: delete the Websockets-implementation to prevent linker trouble
 * ArduinoMqttClient 		-- if USE_MQTT   
 * Adafruit_SSD1306     	-- if USE_OLED
 *...
 
 ### Upload Image and additional files
-The files in "data/" have to be uploaded to the LittleFS filesystem. You can either do it using the LittlFS uploading tool from within Arduino IDE or you can use the upload feature of the integrated filesytem-browser. I've "assimilated" the FSBrowser example of LittleFS, giving you a way to upload and edit individual files.
+The files in "data/" have to be uploaded to the LittleFS filesystem. You can do it using the LittlFS uploading tool from within Arduino IDE. I've "assimilated" the FSBrowser example of LittleFS, for uploading and editing individual files.
 Edit data/config.json as needed.
 There is still some configuration done at compile time. Look at the defines in LEVwb.ino and edit whatever suits your needs. 
 
@@ -41,7 +43,7 @@ There is still some configuration done at compile time. Look at the defines in L
 
 WebGUI
 ====================
-Now the device serves a simple GUI. I'm no GUI designer, so this is more of the least possibl effort ;-)
+Now the device serves a simple GUI. I'm no GUI designer, so this is more of the least possible effort ;-)
 Just open the GUI with http://ipaddrOrHostname/  and the Rest should be very self explanatory.
 It's still not fully working, but at least the basics are implemented.
 
@@ -108,7 +110,7 @@ You have to calibrate the measurement with a known load or with another measurem
 ToDo
 ============
 * configuration... WebGUI for configuration
-* Sonoff Pow Rev2 uses different power meter (CSE7766) -> config option
+* variant for household appiances like dryer, washing machine, dishwasher. They have different needs and use-patterns
 * use OVMS to reduce max charging power according to power recommendations
 * use actual PV production for local planning ( Modbus support )
 * secure auto wifi configuration-- everybody can hijack the wallbox when configured Wifi is down!!!

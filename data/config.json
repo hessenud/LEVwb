@@ -1,4 +1,6 @@
 {
+  "revision" : 2,
+  "ota_passwd" : "janit0R",	
   "hostname": "myHostName",
   "assumed_power": 2300,
   "mqtt_broker": "raspi",
@@ -7,6 +9,7 @@
   "mqtt_password": "tpowpw",
   "device_name": "SimplePOW",
   "model_name": "TPOW Dev",
-  "updateTime": 1000,
-  "modelVariant": 1
+    "updateTime": 1000,
+    "maxPwr": 2300,
+  "modelVariant": 0
 }

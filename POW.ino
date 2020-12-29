@@ -1,4 +1,4 @@
-#ifdef USE_POW
+
 #include "POW.h"
 
 
@@ -13,55 +13,69 @@ void unblockingDelay(unsigned long mseconds) {
 }
 
 
-HLW8012 POW::hlw8012;
 
-const int ledPin   = LED_PIN;
-static const int relayPin  = 12;  // Sonoff 12
-static const int buttonPin = 0;
-
-// When using interrupts we have to call the library entry point
-// whenever an interrupt is triggered
-void ICACHE_RAM_ATTR POW::hlw8012_cf1_interrupt() {
-    hlw8012.cf1_interrupt();
-}
-void ICACHE_RAM_ATTR POW::hlw8012_cf_interrupt() {
-    hlw8012.cf_interrupt();
-}
-
-
-POW::POW()
-  : m_activePwr(0), m_voltage(0), m_current(0), m_apparentPwr(0), m_averagePwr(0), m_pwrFactor(0), m_cumulatedEnergy(0) 
+POW*  newPOW( unsigned i_variant, uSEMP* i_semp )
 {
+    switch ( i_variant ) {
+    case 0:   return new POW_Sim( i_semp );             break;
+    case 1:   return new POW_R1( i_semp );              break; 
+    case 2:   return new POW_R2(  i_semp );             break;
+    default:  return new POW_Sim( i_semp );               break;
+    }
 
-    m_ledState   = LED_OFF;
+}
+
+POW::POW( uSEMP* i_semp)
+:   m_sense(0), m_semp(i_semp), m_activePwr(0), m_voltage(0), m_current(0), m_apparentPwr(0), m_averagePwr(0), m_pwrFactor(0), m_cumulatedEnergy(0)
+{
+    m_last_update=millis();
+}  
+
+void POW::setup() {
+
+
+    loadCalibration(this);
+    m_semp->startService();
+
+    // Open the relay to switch on the load
     m_relayState = RELAY_OFF;
-    pinMode(ledPin, OUTPUT);
-    pinMode(relayPin, OUTPUT);
-    pinMode(buttonPin, INPUT);
+    m_semp->setPwrState( relayState );
 
-    digitalWrite(relayPin, relayState );
-    digitalWrite(ledPin,   LED_LEVEL(ledState) );
+    m_pwrIdx = 0;
+    m_averagePwr = 0;
+    m_minPwrIdx=m_maxPwrIdx = 0;
 
+
+    {
+        m_ledState   = LED_OFF;
+        m_relayState = RELAY_OFF;
+        pinMode(m_ledPin, OUTPUT);
+        pinMode(m_relayPin, OUTPUT);
+        pinMode(m_buttonPin, INPUT);
+
+        digitalWrite(m_relayPin, m_relayLogic^relayState );
+        digitalWrite(m_ledPin,   m_relayLogic^ledState );
+    }
+
+
+
+    for(unsigned  n=0; n<DIM(m_powers); ++n)
+    { 
+        m_powers[n] = m_sense ? m_sense->getActivePower() : 0;
+    }
 }
 
-// Library expects an interrupt on both edges
-void POW::setInterrupts() {
-    attachInterrupt(HLW8012_CF1_PIN, POW::hlw8012_cf1_interrupt, CHANGE);
-    attachInterrupt(HLW8012_CF_PIN,  POW::hlw8012_cf_interrupt, CHANGE);
-}
+
 
 
 void POW::setprefs( unsigned i_cumulatedEnergy, double i_pwrMultiplier, double i_currentMultiplier, double i_voltageMultiplier)
 {
-    DEBUG_PRINT("[HLW] power multiplier   : %f -> %f\n", pwrMultiplier(), i_pwrMultiplier);
-    DEBUG_PRINT("[HLW] current multiplier : %f -> %f\n", currentMultiplier(), i_currentMultiplier) ;
-    DEBUG_PRINT("[HLW] voltage multiplier : %f -> %f\n", voltageMultiplier(), i_voltageMultiplier);
-    DEBUG_PRINT("\n");
-
     m_cumulatedEnergy = i_cumulatedEnergy;
-    hlw8012.setPowerMultiplier( i_pwrMultiplier );
-    hlw8012.setCurrentMultiplier( i_currentMultiplier );
-    hlw8012.setVoltageMultiplier( i_voltageMultiplier );
+    if ( m_sense ) {
+        m_sense->setPowerMultiplier( i_pwrMultiplier );
+        m_sense->setCurrentMultiplier( i_currentMultiplier );
+        m_sense->setVoltageMultiplier( i_voltageMultiplier );
+    }
 
 }
 
@@ -72,12 +86,13 @@ void POW::calibrate(    double expectedVoltage, double expectedPwr, double expec
     DEBUG_PRINT("[HLW] current multiplier : %f\n", currentMultiplier());
     DEBUG_PRINT("[HLW] voltage multiplier : %f\n", voltageMultiplier());
     DEBUG_PRINT("[HLW] power multiplier   : %f\n", pwrMultiplier());
-    hlw8012.resetMultipliers();
-    if (expectedVoltage!=0 && expectedPwr != 0 && expectedCurrent !=0 ) {
+    // m_sense->resetMultipliers();    unblockingDelay(2*UPDATE_TIME);
+    // if multipliers are reset, then at least wait for one Update timebefor reading a new value
+    if (m_sense && (expectedVoltage!=0) && (expectedPwr != 0) && (expectedCurrent !=0) ) {
         // Calibrate using a 60W bulb (pure resistive) on a 230V line
-        hlw8012.expectedActivePower(expectedPwr); //double
-        hlw8012.expectedVoltage(expectedVoltage);
-        hlw8012.expectedCurrent(expectedCurrent ); // (expectedCurrent = double(expectedPwr) / expectedVoltage)) ;
+        m_sense->expectedActivePower(expectedPwr); //double
+        m_sense->expectedVoltage(expectedVoltage);
+        m_sense->expectedCurrent(expectedCurrent ); // (expectedCurrent = double(expectedPwr) / expectedVoltage)) ;
     }
     // Show corrected factors
     DEBUG_PRINT("[HLW] current  : %f\n",(float)expectedCurrent);
@@ -85,8 +100,8 @@ void POW::calibrate(    double expectedVoltage, double expectedPwr, double expec
     DEBUG_PRINT("[HLW] power    : %f\n\n",expectedPwr);
     DEBUG_PRINT("\n");
 
-    saveCalibration();
-    
+    saveCalibration(this);
+
     DEBUG_PRINT("[HLW] After calibration\n");
     DEBUG_PRINT("[HLW] current multiplier : %f\n", currentMultiplier());
     DEBUG_PRINT("[HLW] voltage multiplier : %f\n", voltageMultiplier());
@@ -94,52 +109,6 @@ void POW::calibrate(    double expectedVoltage, double expectedPwr, double expec
     unblockingDelay(1000);
 }
 
-
-void POW::setup(uSEMP* i_semp) {
-    // Open the relay to switch on the load
-    semp = i_semp;
-    semp->startService();
-
-    m_relayState = RELAY_OFF;
-    semp->setPwrState( relayState );
-    pwrIdx = 0;
-    m_averagePwr = 0;
-    _minPwr=minPwr=_maxPwr=maxPwr=minPwrIdx=maxPwrIdx = 0;
-    // Initialize HLW8012
-    // void begin(unsigned char cf_pin, unsigned char cf1_pin, unsigned char sel_pin, unsigned char currentWhen = HIGH, bool use_interrupts = false, unsigned long pulse_timeout = PULSE_TIMEOUT);
-    // * cf_pin, cf1_pin and sel_pin are GPIOs to the HLW8012 IC
-    // * currentWhen is the value in sel_pin to select current sampling
-    // * set use_interrupts to false, we will have to call handle() in the main loop to do the sampling
-    // * set pulse_timeout to 500ms for a fast response but losing precision (that's ~24W precision :( )
-#ifdef USE_POW_INT    
-    hlw8012.begin(HLW8012_CF_PIN, HLW8012_CF1_PIN, HLW8012_SEL_PIN, CURRENT_MODE, true); 
-#else
-    hlw8012.begin(HLW8012_CF_PIN, HLW8012_CF1_PIN, HLW8012_SEL_PIN, CURRENT_MODE, false, 500000);
-#endif
-    // These values are used to calculate current, voltage and power factors as per datasheet formula
-    // These are the nominal values for the Sonoff POW resistors:
-    // * The CURRENT_RESISTOR is the 1milliOhm copper-manganese resistor in series with the main line
-    // * The VOLTAGE_RESISTOR_UPSTREAM are the 5 470kOhm resistors in the voltage divider that feeds the V2P pin in the HLW8012
-    // * The VOLTAGE_RESISTOR_DOWNSTREAM is the 1kOhm resistor in the voltage divider that feeds the V2P pin in the HLW8012
-    hlw8012.setResistors(CURRENT_RESISTOR, VOLTAGE_RESISTOR_UPSTREAM, VOLTAGE_RESISTOR_DOWNSTREAM);
-
-    for(unsigned  n=0; n<DIM(powers); ++n)
-    { 
-        powers[n] = hlw8012.getActivePower();
-    }
-    
-#ifdef USE_POW_INT 
-    setInterrupts();
-#endif
-    loadCalibration();
-
-    DEBUG_PRINT("\n[HLW] Default current multiplier : %f\n", currentMultiplier());
-    DEBUG_PRINT("\n[HLW] Default voltage multiplier : %f\n", voltageMultiplier());
-    DEBUG_PRINT("\n[HLW] Default power multiplier   : %f\n", pwrMultiplier());
-    DEBUG_PRINT("\n");
-
-    
-}
 
 
 
@@ -149,10 +118,81 @@ unsigned POW::calcOnTime( unsigned requestedEnergy, unsigned avr_pwr)
             +180; // + 3 Minutes to give SEMP EM a bit time for planning an control
 }
 
-void POW::handleEnergyReq()
+
+void POW::handleTimeReq()
 {
     DEBUG_PRINT("\n\n\n\n\n\n\n\nhandleEnergyReq\n\n\n\n\n\n" );
 
+    unsigned earliestStart = 0;
+    unsigned latestStop    = 0;
+
+    unsigned minOnTime = 0 KWh;
+    unsigned maxOnTime = 0 KWh;
+
+    unsigned long _now = getTime();
+    unsigned dayoffset = _now - (_now%(1 DAY));
+    int    planHandle = -1;
+
+    for( int n = 0; n < http_server.args(); ++n)
+    {
+        String p1Name = http_server.argName(n);
+        String p1Val = http_server.arg(n);
+        double value= atof( p1Val.c_str() );
+
+        DEBUG_PRINT("p%dName: %s  val: %s\n",n, p1Name.c_str(), p1Val.c_str() );
+
+        if (p1Name == String("min"))          { minOnTime = value;
+        } else if (p1Name == String("max"))          { maxOnTime  = value;
+        } else if (p1Name == String("start"))        { earliestStart   = value + _now;
+        } else if (p1Name == String("end"))          { latestStop      = value + _now;
+        } else if (p1Name == String("startTime"))    { earliestStart   = TimeClk::timeStr2Value(p1Val.c_str()) + dayoffset;
+        } else if (p1Name == String("endTime"))      { latestStop      = TimeClk::timeStr2Value(p1Val.c_str()) + dayoffset;
+        } else if (p1Name == String("fastEnd"))      { latestStop      = _now +  minOnTime;
+        } else if (p1Name == String("plan"))         { planHandle      = atoi(p1Val.c_str()) ;
+        } else {
+        }
+    }
+    if ( earliestStart < _now ) {
+        earliestStart += (1 DAY);
+        latestStop += (1 DAY);
+    }
+    if ( latestStop < _now ) {
+        latestStop += (1 DAY);
+    }
+    DEBUG_PRINT("POW now: %s EST: %s  LET: %s\n", String(TimeClk::getTimeString(_now)).c_str(), String(TimeClk::getTimeString(earliestStart)).c_str()
+            , String(TimeClk::getTimeString(latestStop)).c_str());
+    if (planHandle <0 ) {
+        planHandle = m_semp->requestTime(_now, minOnTime,  maxOnTime,  earliestStart, latestStop );
+    } else {
+        m_semp->modifyPlanTime(planHandle, _now, minOnTime,  maxOnTime,  earliestStart, latestStop );
+    }
+    DEBUG_PRINT("POW requested Energy on plan %d\n", planHandle);
+
+
+    String resp = String("[HLW] Active Power (W)    : ") + String(activePwr) +
+            String("\n[HLW] Voltage (V)         : ") + String(voltage) +
+            String("\n[HLW] Current (A)         : ") + String(current) +
+            String("\n[HLW] Energy") +
+            String("\n[HLW] \ttotal     : ") + String(_cumulatedEnergy) +
+            String("\n[HLW] \trequested : ") + String(minOnTime) +
+            String("\n[HLW] \toptional  : ") + String(maxOnTime)  +
+            String("\n[HLW] \tstart     : ") + String(TimeClk::getTimeString(earliestStart))   +
+            String("\n[HLW] \tend       : ") + String(TimeClk::getTimeString(latestStop))      +
+            +"\n";
+
+    char buffer[resp.length() + 10*40];
+    unsigned wp = sprintf(buffer,"\n%s\n",resp.c_str());
+    m_semp->dumpPlans(&buffer[wp-1]);
+
+    DEBUG_PRINT("%s\n", buffer);
+
+    replyOKWithMsg(resp);
+
+}
+
+
+void POW::handleEnergyReq()
+{
     unsigned earliestStart = 0;
     unsigned latestStop    = 0;
 
@@ -189,14 +229,14 @@ void POW::handleEnergyReq()
     if ( latestStop < _now ) {
         latestStop += (1 DAY);
     }
-    Serial.printf("POW now: %s EST: %s  LET: %s\n", String(TimeClk::getTimeString(_now)).c_str(), String(TimeClk::getTimeString(earliestStart)).c_str()
+    DEBUG_PRINT("POW now: %s EST: %s  LET: %s\n", String(TimeClk::getTimeString(_now)).c_str(), String(TimeClk::getTimeString(earliestStart)).c_str()
             , String(TimeClk::getTimeString(latestStop)).c_str());
     if (planHandle <0 ) {
-        planHandle = semp->requestEnergy(_now, requestedEnergy,  optionalEnergy,  earliestStart, latestStop );
+        planHandle = m_semp->requestEnergy(_now, requestedEnergy,  optionalEnergy,  earliestStart, latestStop );
     } else {
-        semp->modifyPlan(planHandle, _now, requestedEnergy,  optionalEnergy,  earliestStart, latestStop );
+        m_semp->modifyPlan(planHandle, _now, requestedEnergy,  optionalEnergy,  earliestStart, latestStop );
     }
-    Serial.printf("POW requested Energy on plan %d\n", planHandle);
+    DEBUG_PRINT("POW requested Energy on plan %d\n", planHandle);
 
 
     String resp = String("[HLW] Active Power (W)    : ") + String(activePwr) +
@@ -212,12 +252,12 @@ void POW::handleEnergyReq()
 
     char buffer[resp.length() + 10*40];
     unsigned wp = sprintf(buffer,"\n%s\n",resp.c_str());
-    semp->dumpPlans(&buffer[wp-1]);
-    Serial.printf("response:\n%s\n",  buffer );
+    m_semp->dumpPlans(&buffer[wp-1]);
+    _DEBUG_PRINT("response:\n%s\n",  buffer );
 
     DEBUG_PRINT("%s\n", buffer);
     handleStat();
-    Serial.printf(" requested Energy end\n" );
+    _DEBUG_PRINT(" requested Energy end\n" );
 
 }
 
@@ -295,131 +335,93 @@ void POW::handlePwrReq()
 }
 
 void POW::loop() {
-    static unsigned long last;
+    m_sense->loop();  // Polled sensors need some cpu
     unsigned long now=millis();
     // This UPDATE_TIME should be at least twice the minimum time for the current or voltage
     // signals to stabilize. Experimentally that's about 1 second.
-    long dt = ( now - last);
-    if ((now - last) > UPDATE_TIME) {
-        last = now;
+    long dt = ( now - m_last_update);
+    if ( dt > UPDATE_TIME) {
+
+        _DEBUG_PRINT("POW update\n");
+        m_last_update = now;
         unsigned _time = getTime();
         unsigned requestedEnergy = 0;
         unsigned optionalEnergy  = 0;
-        PlanningData* plan = semp->getActivePlan();
+        PlanningData* plan = m_semp->getActivePlan();
         if (plan){
             requestedEnergy = plan->m_requestedEnergy;
             optionalEnergy  = plan->m_optionalEnergy;
         }
 
-#ifdef HLW_SIM
-        static unsigned sim_rd;
-        static const unsigned hlw_sim[] = { 900, 600, 1250, 1750, 1500, 150, 850, 10, 500, 1000, 1250, 120, 750 ,80, 500, 1000, 250
-                ,750 , 1000, 150, 850,  500, 1000, 250, 500, 1000, 250, 750, 300, 800, 1400, 1600, 900, 700   };
-        static unsigned hlw_vsim[] = {229, 230,231,235,232,228,227 };
+        if ( m_sense ) {
+            m_activePwr = relayState ? m_sense->getActivePower(): 0;
+            m_voltage   = m_sense->getVoltage();
+            m_current   = relayState ? m_sense->getCurrent(): 0;
+            m_apparentPwr = relayState ? m_sense->getApparentPower():0;
 
+            // manipulate sum directly
+            m_sumPwr -= m_powers[m_pwrIdx];
+            m_sumPwr += activePwr;
+            // maintain mix/maxIdx to avoid searching the array
+            if ( m_powers[m_pwrIdx] <= m_powers[m_minPwrIdx] ) m_minPwrIdx = m_pwrIdx;
+            if ( m_powers[m_pwrIdx] >= m_powers[m_maxPwrIdx] ) m_maxPwrIdx = m_pwrIdx;
+            m_powers[m_pwrIdx] = activePwr;
+            m_averagePwr = m_sumPwr/DIM(m_powers);
 
-        m_apparentPwr = m_activePwr =  relayState ? hlw_sim[(sim_rd)%DIM(hlw_sim)] : 0;
-        m_voltage =  hlw_vsim[(sim_rd)%DIM(hlw_vsim)];
-        m_current = (double)activePwr / (double)voltage;
-        ++sim_rd;
-        Serial.printf("Simulated POW read(%u): %u  avr:%u  u:%u i:%f\n",sim_rd, activePwr, averagePwr, voltage, current);
-#else
-        m_activePwr = hlw8012.getActivePower();
-        m_voltage   = hlw8012.getVoltage();
-        m_current   = hlw8012.getCurrent();
-        m_apparentPwr = hlw8012.getApparentPower();
-#endif
+            if ( ++m_pwrIdx >= DIM(m_powers) ) {
+                m_pwrIdx = 0;;
+                //DEBUG_PRINT("idx: %u/%u --average POWER: %u\n", pwrIdx, DIM_PWRS, averagePwr );
+            } else {
+                //DEBUG_PRINT("summing actualPower: %u\n", activePwr );
+            }
 
-        // get min and max of last values
-        _minPwr = _maxPwr = activePwr;
-#if 1
-        // manipulate sum directly
-        sumPwr -= powers[pwrIdx];
-        sumPwr += activePwr;
-        // maintain mix/maxIdx to avoid searching the array
-        if ( powers[pwrIdx] <= powers[minPwrIdx] ) minPwrIdx = pwrIdx;
-        if ( powers[pwrIdx] >= powers[maxPwrIdx] ) maxPwrIdx = pwrIdx;
-        powers[pwrIdx] = activePwr;
-        m_averagePwr = sumPwr/DIM(powers);
-        // commit the min/max values
-        minPwr = powers[minPwrIdx];
-        maxPwr = powers[maxPwrIdx] ; 
-#else
-
-        unsigned long sum = 0;
-        powers[pwrIdx] = activePwr;
-        for(unsigned  n=0; n<DIM(powers); ++n)
-        {
-            if ( powers[n] < _minPwr ) _minPwr = (unsigned) powers[n];
-            if ( powers[n] > _maxPwr ) _maxPwr = (unsigned) powers[n];
-            sum += powers[n];
-            averagePwr = sum/DIM(powers);
-        }
-        // commit the min/max values
-        minPwr = (unsigned) _minPwr;
-        maxPwr = (unsigned) _maxPwr;  
-#endif
-        if ( ++pwrIdx >= DIM(powers) ) {
-            pwrIdx = 0;;
-            //Serial.printf("idx: %u/%u --average POWER: %u\n", pwrIdx, DIM_PWRS, averagePwr );
-        } else {
-            //Serial.printf("summing actualPower: %u\n", activePwr );
-        }
-
-        m_pwrFactor = (int) (100 * hlw8012.getPowerFactor());
+            m_pwrFactor = (int) (100 * (m_sense ? m_sense->getPowerFactor() : 0.001) );
 
 #ifdef USE_POW_DBG
-        DEBUG_PRINT("[HLW] Active Power (W)    : %u\n", activePwr     );
-        DEBUG_PRINT("[HLW] Voltage (V)         : %u\n", voltage       );
-        DEBUG_PRINT("[HLW] Current (A)         : %f\n", current );
-        DEBUG_PRINT("[HLW] Apparent Power (VA) : %u\n", apparentPwr );
-        DEBUG_PRINT("[HLW] Power Factor (%)    : %f\n", pwrFactor     );  
+            DEBUG_PRINT("[HLW] Active Power (W)    : %u\n", activePwr     );
+            DEBUG_PRINT("[HLW] Voltage (V)         : %u\n", voltage       );
+            DEBUG_PRINT("[HLW] Current (A)         : %f\n", current );
+            DEBUG_PRINT("[HLW] Apparent Power (VA) : %u\n", apparentPwr );
+            DEBUG_PRINT("[HLW] Power Factor (%)    : %f\n", pwrFactor     );
 #endif // USE_POW_DBG
-        _cumulatedEnergy += activePwr*dt;  /// Wms  -> 1/(3600*1000) Wh
-        while ( _cumulatedEnergy > Wh2Wms(1) ) {
+            _cumulatedEnergy += activePwr*dt;  /// Wms  -> 1/(3600*1000) Wh
+            while ( _cumulatedEnergy > Wh2Wms(1) ) {
 
-            ++m_cumulatedEnergy;
-            _cumulatedEnergy -= Wh2Wms(1);
-            if ( requestedEnergy > 0) {
-                --requestedEnergy;
-                semp->updateEnergy( _time,  -1,  0 );
-            }
-            //          else {
-            //            // switch OFF
-            //            semp->updateEnergy( 0,  0 );
-            //            relayState = LOW;
-            //            semp->setPwrState( relayState );
-            //          }
-            if ( optionalEnergy > 0)  {
-                --optionalEnergy;
-                semp->updateEnergy( _time, 0,  -1 );
-            }
+                ++m_cumulatedEnergy;
+                _cumulatedEnergy -= Wh2Wms(1);
+                if ( requestedEnergy > 0) {
+                    --requestedEnergy;
+                    m_semp->updateEnergy( _time,  -1,  0 );
+                }
 
+                if ( optionalEnergy > 0)  {
+                    --optionalEnergy;
+                    m_semp->updateEnergy( _time, 0,  -1 );
+                }
+            }
         }
+#ifdef USE_POW_DBG
         DEBUG_PRINT("[HLW] _cumulatedEnergy    : %ul\n", _cumulatedEnergy     );  
         DEBUG_PRINT("[HLW] cumulatedEnergy    : %u\n", cumulatedEnergy     );
         DEBUG_PRINT("[HLW] requestedEnergy    : %u\n", requestedEnergy     );  
         DEBUG_PRINT("[HLW] optionalEnergy     : %u\n", optionalEnergy     );  
-        semp->updateEnergy( _time, 0,  0 );
-        semp->setPwr( averagePwr, minPwr, maxPwr);
-
-#ifndef USE_POW_INT
-        // When not using interrupts we have to manually switch to current or voltage monitor
-        // This means that every time we get into the conditional we only update one of them
-        // while the other will return the cached value.
-        hlw8012.toggleMode();
 #endif
+        m_semp->updateEnergy( _time, 0,  0 );
+        m_semp->setPwr( averagePwr, m_powers[m_minPwrIdx], m_powers[m_maxPwrIdx]);
+        _DEBUG_PRINT("POW update end\n");
     }
 }
 
+
+
 void POW::setPwr(bool i_state )
 {
-    if (relayState != i_state ) digitalWrite(relayPin, m_relayState = i_state );
+    if (relayState != i_state ) digitalWrite(m_relayPin, m_relayLogic^(m_relayState = i_state) );
 }
 
 void POW::setLED(bool i_state )
 {
-    if (ledState != i_state ) digitalWrite(ledPin, LED_LEVEL(m_ledState = i_state) );
+    if (ledState != i_state ) digitalWrite(m_ledPin, m_ledLogic ^(m_ledState = i_state) );
 }
 void POW::toggleRelay()
 {
@@ -430,9 +432,93 @@ void POW::toggleLED()
     setLED( !ledState );
 }
 
-#else
-void setupPOW() {
 
+
+
+
+//-------- 
+HLW8012* g_HLW;
+void ICACHE_RAM_ATTR hlw_cf1_interrupt(){ if(g_HLW) g_HLW->cf1_interrupt(); }
+void ICACHE_RAM_ATTR hlw_cf_interrupt(){ if(g_HLW) g_HLW->cf_interrupt();  }
+void POW_R1::setInterrupts() {
+    g_HLW = static_cast<PwrSensHLW8012*>(m_sense)->getHLW8012();
+    attachInterrupt(HLW8012_CF1_PIN, hlw_cf1_interrupt, CHANGE   );
+    attachInterrupt(HLW8012_CF_PIN,  hlw_cf_interrupt,  CHANGE   );
 }
-void loopPOW() {}
-#endif
+
+POW_R1::POW_R1( uSEMP* i_semp): POW( i_semp) 
+{
+    // Sonoff POW Rev1
+    DEBUG_PRINT(" POW instance Sonoff POW Rev1\n" );
+    m_sense = new PwrSensHLW8012();
+    m_ledPin      = LED_PIN_R1;
+    m_relayPin    = RELAY_PIN;
+    m_buttonPin   = 0;
+    m_ledLogic  = true; // inverted
+    m_relayLogic = false;
+    if(m_sense) {
+        ((PwrSensHLW8012*) m_sense)->begin(HLW8012_CF_PIN, HLW8012_CF1_PIN, HLW8012_SEL_PIN, CURRENT_MODE, true); 
+
+        DEBUG_PRINT(" set resistors\n" );
+
+        // HLW8012 specific
+        // These values are used to calculate current, voltage and power factors as per datasheet formula
+        // These are the nominal values for the Sonoff POW resistors:
+        // * The CURRENT_RESISTOR is the 1milliOhm copper-manganese resistor in series with the main line
+        // * The VOLTAGE_RESISTOR_UPSTREAM are the 5 470kOhm resistors in the voltage divider that feeds the V2P pin in the HLW8012
+        // * The VOLTAGE_RESISTOR_DOWNSTREAM is the 1kOhm resistor in the voltage divider that feeds the V2P pin in the HLW8012
+        m_sense->setResistors(CURRENT_RESISTOR, VOLTAGE_RESISTOR_UPSTREAM, VOLTAGE_RESISTOR_DOWNSTREAM);
+    }
+
+    setup();
+
+    setInterrupts();
+} 
+
+POW_R2::POW_R2( uSEMP* i_semp) : POW( i_semp) 
+{
+    // Sonoff POW Rev2
+    DEBUG_PRINT(" POW instance Sonoff POW Rev2\n" );
+    m_sense = new PwrSensCSE7766();
+    m_ledPin      = LED_PIN_R2;
+    m_relayPin    = RELAY_PIN;
+    m_buttonPin   = 0;
+    m_ledLogic  = false;
+    m_relayLogic = false;
+    if(m_sense) ((PwrSensCSE7766*) m_sense)->begin( CSE7766_PIN, 4800 );
+    setup();
+}
+
+POW_Sim::POW_Sim( uSEMP* i_semp) : POW( i_semp) 
+{
+    DEBUG_PRINT(" POW instance Simu\n" );
+    m_sense = new PwrSensSim();
+    m_ledPin    = LED_BUILTIN;
+    m_relayPin  = 12;
+    m_buttonPin = 0;
+
+    m_ledLogic  = false;
+    m_relayLogic = false;
+    setup();
+}
+
+
+
+#define SIM_SENSE_TIME 1000
+const unsigned PwrSensSim::hlw_sim[] = { 900, 600, 1250, 1750, 1500, 150, 850, 10, 500, 1000, 1250, 120, 750 ,80, 500, 1000, 250
+        ,750 , 1000, 150, 850,  500, 1000, 250, 500, 1000, 250, 750, 300, 800, 1400, 1600, 900, 700   };
+const unsigned PwrSensSim::hlw_vsim[] = {229, 230,231,235,232,228,227 };
+
+unsigned int PwrSensSim::getVoltage(){ return  hlw_vsim[(m_sim_rd)%DIM(hlw_vsim)];}
+unsigned int PwrSensSim::getActivePower(){ return  hlw_sim[(m_sim_rd)%DIM(hlw_sim)]; }
+unsigned int PwrSensSim::getApparentPower(){ return   hlw_sim[(m_sim_rd)%DIM(hlw_sim)];}
+
+void PwrSensSim::loop(){
+    unsigned long now = millis();
+
+    if ( now - m_last_update > SIM_SENSE_TIME )
+    {
+        ++m_sim_rd;
+        m_last_update = now;
+    }
+}

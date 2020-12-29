@@ -1,3 +1,4 @@
+
 void setupSSDP() 
 {
     String myIP = WiFi.localIP().toString();  
@@ -22,7 +23,7 @@ void setupSSDP()
 
 
 
-    Serial.printf_P( PSTR("Starting SSDP...\n"));
+   // DEBUG_PRINT_P( PSTR("Starting SSDP...\n"));
     SSDP.setSchemaURL( ssdpcfg.descriptionURL);
     SSDP.setURL(ssdpcfg.descriptionURL);
     SSDP.setDeviceType("urn:schemas-simple-energy-management-protocol:device:Gateway:1");  
@@ -33,7 +34,7 @@ void setupSSDP()
     /** SSDP schema has to be recreated, as the SSDP Library Scheme can't be sufficiently expanded **/
     //-------  Schema overwrite BEGIN
     const char* ssdpScheme = g_semp->makeSsdpScheme( &ssdpcfg);
-    DEBUG_PRINT(" SSDPC Scheme:\n%s\n", ssdpScheme );        
+    _DEBUG_PRINT(" SSDP Scheme:\n%s\n", ssdpScheme );        
 
     semp_server.on(String("/") + ssdpcfg.descriptionURL, HTTP_GET, [ssdpScheme,ssdpcfg]() {
         DEBUG_PRINT("SSDP request /%s\n%s", ssdpcfg.descriptionURL, ssdpScheme );
@@ -41,6 +42,4 @@ void setupSSDP()
     });
     //-------  Schema overwrite END    
     SSDP.begin();
-
-    Serial.printf_P(PSTR("Ready!\n"));
 }
