@@ -63,6 +63,7 @@ void setupWebSrv()
         http_server.on("/ctl",        HTTP_GET, handleCtl );
         http_server.on("/setProfile", HTTP_GET, handleSetProfile );
         http_server.on("/getProfiles",HTTP_GET, handleGetProfile );
+        http_server.on("/setConfig",  HTTP_GET, handleSetConfig );
 
         http_server.on("/restart",    HTTP_GET, []() { 
             fileSystem->end();
@@ -203,6 +204,53 @@ void handleGetProfile()
 
     DEBUG_PRINT(PSTR("Profiles: \n%s\n"), resp.c_str());
     replyOKWithMsg(  resp);
+}
+
+void handleSetConfig()
+{
+     DEBUG_PRINT("handleSetConfig:\n");
+     
+  for ( int n = 0; n < http_server.args(); ++n) {
+        String pName = http_server.argName(n);
+        String pVal = http_server.arg(n);
+        //float value = atof( p1Val.c_str() );
+        DEBUG_PRINT("p%02d Name: %s  val: %s\n", n, pName.c_str(), pVal.c_str() );
+
+
+#define setPrefStr( __prf, __v )  replaceString( ((char**)&(g_prefs.__prf) ), __v.c_str() )
+#define setPref( __prf, __v )  g_prefs.__prf = __v
+#define pSWITCH(__key, __val )  { String _k = __key; String _v = __val; if ( false ) {
+#define pCASE_str( __prf )  } else if (pName == String( #__prf ) ){ DEBUG_PRINT("str: %s <- %s\n", #__prf, pVal.c_str() );  setPrefStr( __prf, pVal )
+#define pCASE_unsigned( __prf )  } else if (pName == String( #__prf ) ){ DEBUG_PRINT("val: %s <- %u\n", #__prf, atoi(pVal.c_str()) ); setPref( __prf, atoi(pVal.c_str()) )
+#define pCASE_bool( __prf )  } else if (pName == String( #__prf ) ){ DEBUG_PRINT("val: %s <- &s\n", #__prf, pVal.c_str() ); setPref( __prf, (pVal == "true") )
+#define pDEFAULT } else {
+#define pEND }}
+
+        pSWITCH( pName, pVal ) 
+          pCASE_str( hostname );
+          pCASE_str( mqtt_broker ); 
+          pCASE_unsigned( mqtt_broker_port ); 
+          pCASE_str( mqtt_user );
+          pCASE_str( ota_passwd ); 
+          pCASE_str( device_name ); 
+          pCASE_str( model_name ); 
+          pCASE_unsigned( serialNr ); 
+          pCASE_unsigned( modelVariant ); 
+          pCASE_unsigned( devType ); 
+          pCASE_unsigned( maxPwr );
+          pCASE_unsigned( updateTime ); 
+          pCASE_unsigned( defCharge ); 
+          pCASE_bool( intr ); 
+          pCASE_bool( use_oled ); 
+        pDEFAULT
+          replyNotFound(  "ERR");
+            return; 
+        pEND
+    }
+    savePrefs();
+    
+    replyOK();
+    
 }
 
 void handleSetProfile()

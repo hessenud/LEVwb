@@ -11,7 +11,7 @@ void setupSSDP()
             /* modelName        */  g_prefs.model_name,
 
             /* description      */  "Sonoff POW reloaded",
-            /* modelNr          */  "0.1",
+            /* modelNr          */  "0.2",
             /* modelURL         */  "http://www.marihessenauer.de/TPOW_V1",
 
 

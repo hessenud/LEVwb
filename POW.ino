@@ -2,9 +2,6 @@
 #include "POW.h"
 
 
-// local variables
-static unsigned _cumulatedEnergy; // delta of comulated energy 
-
 
 
 void unblockingDelay(unsigned long mseconds) {
@@ -26,7 +23,7 @@ POW*  newPOW( unsigned i_variant, uSEMP* i_semp )
 }
 
 POW::POW( uSEMP* i_semp)
-:   m_sense(0), m_semp(i_semp), m_activePwr(0), m_voltage(0), m_current(0), m_apparentPwr(0), m_averagePwr(0), m_pwrFactor(0), m_cumulatedEnergy(0)
+:   m_sense(0), m_semp(i_semp), m_activePwr(0), m_voltage(0), m_current(0), m_apparentPwr(0), m_averagePwr(0), m_pwrFactor(0), m_cumulatedEnergy(0),_cumulatedEnergy(0)
 {
     m_last_update=millis();
 }  
@@ -121,7 +118,7 @@ unsigned POW::calcOnTime( unsigned requestedEnergy, unsigned avr_pwr)
 
 void POW::handleTimeReq()
 {
-    DEBUG_PRINT("\n\n\n\n\n\n\n\nhandleEnergyReq\n\n\n\n\n\n" );
+    DEBUG_PRINT("\n\n\n\n\n\n\n\nhandleTimeReq\n\n\n\n\n\n" );
 
     unsigned earliestStart = 0;
     unsigned latestStop    = 0;
@@ -193,6 +190,9 @@ void POW::handleTimeReq()
 
 void POW::handleEnergyReq()
 {
+  
+    DEBUG_PRINT("\n\n\n\n\n\n\n\nhandleEnergyReq\n\n\n\n\n\n" );
+
     unsigned earliestStart = 0;
     unsigned latestStop    = 0;
 

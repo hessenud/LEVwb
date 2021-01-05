@@ -6,8 +6,13 @@
  <link rel="stylesheet" href="style.css">
 
 <script>
+
+function goMain(p) {
+	window.location.href = "main.html";
+}
+
 function doRequest(url, upd) {
-	//var pref = "http://192.168.178.35/"; url = pref + url;
+	// var pref = "http://192.168.178.35/"; url = pref + url;
 	fetch(url, {mode: 'no-cors'} )
 	  .then(function(response) {
 		  return response.json();
@@ -17,16 +22,11 @@ function doRequest(url, upd) {
 	  })
 	  .catch(function(error) {
 	    console.log('Request failed', error)
+	  alert(url + "  " + 'Request failed');
 	  });
 }
 </script>
 <title>LEVwb Charge</title>
-<style>
-input[type="number"],input[type="time"] {
-   width:80px;
-}
-button { height: 3em; border-radius: 2em; background-color: lightgrey; }
-</style>
 </head>
 <body onload="javascript:init()">
 	<span class="title">LEVwb Control</span>
@@ -73,34 +73,16 @@ button { height: 3em; border-radius: 2em; background-color: lightgrey; }
 
 </body>
 <script>
-function __doRequest(url, upd) {
-	var pref = "http://192.168.178.35/"; url = pref + url;
-	fetch(url, {mode: 'no-cors'} )
-	  .then(function(response) {
-		  return response.text();
-	  })
-	  .then(function(resp){
-		  // alert( resp );
-		  if (upd) upd(JSON.parse(resp));  //updateProfiles(resp);
-	  })
-	  .catch(function(error) {
-	    console.log('Request failed', error)
-	  });
-}
 	function reqCharge(req, opt, est, let, tod) {
- 		var rq = "energy?plan=0&"
+		var rq = "energy?plan=0&"
          	+ "requested=" + req
          	+ "&optional=" + opt
-         	+ (tod ? ("&startTime=" + ((est=="undefined") ? 0 : est )
-                 	 + ( let ? ("&endTime=" + let) : "&fastEnd"))
-                 	:
-                 	 ("&start=" + ((est=="undefined") ? 0 : est )
-                     + ( let ? ("&end=" + let) : "&fastEnd"))
-         			)
-         	;
- 		doRequest( rq ) ;
+         	+ (( est == "" ) ? ("&start=0") : ((tod ? "&startTime=" : "&start=") + est))
+         	+ (( let == "") ? "&fastEnd" : ((tod ? "&endTime=" : "&end=") + let))
+         	
+		
+ 		doRequest( rq, goMain ) ;
  		
- 		window.location.href = "main.html";
  	}
 	
  	function commitProf( pid, req, opt, est, let , tod){
@@ -108,8 +90,8 @@ function __doRequest(url, upd) {
  		var rq = "setProfile?profile=" + pid
         		+ "&requested="  + req
           		+ "&optional=" + opt
-         	 	+ "&startTime=" + ((est=="undefined") ? 0 : est )
-         		+ "&endTime=" + ((let=="undefined") ? 0 : let )
+         	 	+ "&startTime=" + ((est=="") ? 0 : est )
+         		+ "&endTime=" + ((let=="") ? 0 : let )
          		+ (tod ? "&ToD" : "")
           			;
   		doRequest( rq ) ;  

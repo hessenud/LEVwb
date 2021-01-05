@@ -14,7 +14,7 @@ body {
 	text-align: center;
 	color: white;
 	background-color: lightblue;
-	border-radius: 1em;
+	border-radius: 0.3em;
 	padding: 0.3em;
 }
 
@@ -23,7 +23,7 @@ body {
 	text-align: right;
 	color: white;
 	background-color: #c04020;
-	border-radius: 1em;
+	border-radius: 0.3em;
 	padding: 0.3em;
 }
 .col2 {
@@ -40,4 +40,4 @@ body {
 input[type="number"],input[type="time"] {
    width:60px;
 }
-button { height: 3em; border-radius: 2em; background-color: lightgrey; }
+button { height: 3em; border-radius: 0.9em; background-color: lightgrey; }

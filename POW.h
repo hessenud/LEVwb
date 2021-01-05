@@ -218,17 +218,17 @@ public:
 
     void setResistors(double , double , double ){ }
 
-    void expectedCurrent(double current){  }
-    void expectedVoltage(unsigned int voltage){ }
-    void expectedActivePower(unsigned int power){}
+    void expectedCurrent(double ){  }
+    void expectedVoltage(unsigned int ){ }
+    void expectedActivePower(unsigned int ){}
 
     double getCurrentMultiplier() { return 1.0; };
     double getVoltageMultiplier() { return 1.0;};
     double getPowerMultiplier()   { return 1.0;};
 
-    void setCurrentMultiplier(double current_multiplier) {  };
-    void setVoltageMultiplier(double voltage_multiplier) {  };
-    void setPowerMultiplier(double power_multiplier) {  };
+    void setCurrentMultiplier(double ) {  };
+    void setVoltageMultiplier(double ) {  };
+    void setPowerMultiplier(double ) {  };
     void resetMultipliers() { }
 
     void loop();
@@ -255,6 +255,8 @@ protected:
     unsigned  m_averagePwr;
     double    m_pwrFactor;
     unsigned  m_cumulatedEnergy;
+    unsigned _cumulatedEnergy; // delta of comulated energy 
+
 
 
     int       m_ledState;

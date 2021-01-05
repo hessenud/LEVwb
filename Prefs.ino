@@ -4,6 +4,31 @@
 
 
 int eeprom_wp = 0;
+Prefs::Prefs()
+{
+    revision=0; 
+    hostname=0; 
+    ota_passwd=0; 
+    assumed_power=0; 
+    mqtt_broker=0; 
+    mqtt_broker_port=0; 
+    mqtt_user=0; 
+    mqtt_password=0; 
+    
+    device_name=0; 
+    model_name=0; 
+    serialNr=0; 
+    updateTime=0; 
+    modelVariant=0; 
+    
+    
+    devType=12; 
+    maxPwr=0; 
+    intr=false; 
+    use_oled = false;
+    defCharge=0; 
+}
+
 
 void loadCalibration(POW* i_pow)
 {
@@ -66,8 +91,7 @@ void loadPrefs()
     // Device COnfiguration
     DEBUG_PRINT("JsonDeserializationBuffer capacity:%u\n", Prefs::capacity  );
        
-    StaticJsonDocument<Prefs::capacity> cfg;
-    //StaticJsonDocument<512> cfg;
+    DynamicJsonDocument cfg(Prefs::capacity);
     
     File file = LittleFS.open(PREFERENCES_FILE,"r");
     // Deserialize the JSON document
@@ -80,46 +104,60 @@ void loadPrefs()
         g_prefs.hostname = HOSTNAME;
         g_prefs.assumed_power = MAX_CONSUMPTION;     ///< assumed power for calculations
 
-        g_prefs.mqtt_broker   = "raspi";
-        g_prefs.mqtt_broker_port = 1883;
-        g_prefs.mqtt_user     = "tpow";
-        g_prefs.mqtt_password = "tpowpw";
+        g_prefs.mqtt_broker   = "";
+        g_prefs.mqtt_broker_port = 0;
+        g_prefs.mqtt_user     = "";
+        g_prefs.mqtt_password = "";
 
         g_prefs.device_name   = DEVICE_NAME;
         g_prefs.model_name    = HOSTNAME " DevBoard" ;
 
         g_prefs.updateTime    = 1000;
         g_prefs.modelVariant   = 1;
-
+        g_prefs.serialNr  = 1;
         g_prefs.devType   = 0;
         g_prefs.maxPwr    = MAX_CONSUMPTION;
         g_prefs.intr      = true;
         g_prefs.defCharge = 1000;
-        
+        g_prefs.use_oled  = false;
         file.close();
         savePrefs();
     } else {
         DEBUG_PRINT(" use stored Prefs!!!\n");
-        loadPref( revision );
-        loadPrefStr(  ota_passwd );
-        loadPrefStr(  hostname); //g_prefs.hostname      =  storeString( cfg["hostname"] );
-        loadPref(     assumed_power   ); // = cfg["assumed_power"];
-        loadPrefStr(  mqtt_broker  ); // = storeString( cfg["mqtt_broker"] );
-        loadPref(     mqtt_broker_port); // = cfg["mqtt_broker_port"];
-        loadPrefStr(  mqtt_user    ); // = storeString( cfg["mqtt_user"] );
-        loadPrefStr(  mqtt_password); // = storeString( cfg["mqtt_password"]);
+        loadPref( revision, 0 );
+        loadPrefStr(  ota_passwd, "wadsdapassvoid");
+        loadPrefStr(  hostname, HOSTNAME); 
+        loadPref(     assumed_power, MAX_CONSUMPTION ); 
+        loadPrefStr(  mqtt_broker, ""  );
+        loadPref(     mqtt_broker_port, 0);
+        loadPrefStr(  mqtt_user, ""    ); 
+        loadPrefStr(  mqtt_password, ""); 
 
-        loadPrefStr(  device_name); //   = storeString( cfg["device_name"] );
-        loadPrefStr(  model_name ); //   = storeString( cfg["model_name"]);
+        loadPrefStr(  device_name, DEVICE_NAME); 
+        loadPrefStr(  model_name, HOSTNAME " Dev"  );
+        loadPref(     serialNr, 9999  ); 
 
-        loadPref(     updateTime  ); //  = cfg["updateTime"];
-        loadPref(     modelVariant); //  = cfg["modelVariant"];
+        loadPref(     updateTime, 1000  ); 
+        loadPref(     modelVariant,  0 ); 
 
-        loadPref(     devType); //   = cfg["devType"];
-        loadPref(     maxPwr ); //   = cfg["maxPwr"];
-        loadPref(     intr   ); //   = cfg["intr"];
-        loadPref(     defCharge); // = cfg["defCharge"];
+        loadPref(     devType,  uSEMP::Other); 
+        loadPref(     maxPwr, MAX_CONSUMPTION );
+        loadPref(     intr, true   );
+        loadPref(     defCharge, 2000 ); 
+
         if (g_prefs.maxPwr == 0)  g_prefs.maxPwr    = MAX_CONSUMPTION;
+
+    
+        for (unsigned n = 0; n < N_CHRG_PROFILES; ++n) {
+    #define loadProfileMember( __member )    g_prefs.chgProfile[n].__member = cfg["profiles"][n][ #__member ] 
+            loadProfileMember(  timeOfDay );
+            loadProfileMember( est );   
+            loadProfileMember( let) ;
+            loadProfileMember( req );
+            loadProfileMember( opt );
+        }
+
+        
         file.close();
     }
   
@@ -130,15 +168,12 @@ void loadPrefs()
 
 void savePrefs() {
     // Allocate a temporary JsonDocument
-    // Don't forget to change the capacity to match your requirements.
-    // Use arduinojson.org/assistant to compute the capacity.
-
-    StaticJsonDocument<Prefs::capacity> cfg;
+    DynamicJsonDocument cfg(Prefs::capacity);
     // Set the values in the document
 
     storePref(  revision );
     storePref(  ota_passwd );
-    storePref(  hostname ); // cfg["hostname"] = g_prefs.hostname;
+    storePref(  hostname );
     storePref(  assumed_power); 
     storePref(  mqtt_broker); 
     storePref(  mqtt_broker_port);
@@ -147,14 +182,29 @@ void savePrefs() {
 
     storePref(  device_name);
     storePref(  model_name);
+    storePref(  serialNr  ); 
 
     storePref(  updateTime);
     storePref(  modelVariant);
 
-    storePref(  devType); //   = cfg["devType"];
-    storePref(  maxPwr ); //   = cfg["maxPwr"];
-    storePref(  intr   ); //   = cfg["intr"];
-    storePref(  defCharge); // = cfg["defCharge"];
+    storePref(  devType); 
+    storePref(  maxPwr ); 
+    storePref(  intr   ); 
+    storePref(  defCharge);
+    storePref(  use_oled); 
+      
+    // profiles
+    
+    for (unsigned n = 0; n < N_CHRG_PROFILES; ++n) {
+#define storeProfileMember( __member )    cfg["profiles"][n][ #__member ] = g_prefs.chgProfile[n].__member 
+
+        storeProfileMember(  timeOfDay );
+        storeProfileMember( est );   
+        storeProfileMember( let) ;
+        storeProfileMember( req );
+        storeProfileMember( opt );
+    }
+
     
     // Serialize JSON to file
     File file = fileSystem->open(PREFERENCES_FILE, "w+");
