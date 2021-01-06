@@ -1,4 +1,4 @@
-
+#ifdef USE_OLED
 void setupOLED()
 {
   if( g_prefs.use_oled ) 
@@ -52,3 +52,8 @@ void draw( const char* i_text) {
     display.display();
   }
 }
+#else
+void setupOLED(){}
+void draw( const char* ){}
+
+#endif

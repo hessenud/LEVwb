@@ -1,10 +1,11 @@
 
-#define DEV_BOARD     /////////<<<<<<< DEVELOPER Board Selection  set befor inlcudes!!
+#define _DEV_BOARD     /////////<<<<<<< DEVELOPER Board Selection  set befor inlcudes!!
 
 //-----------------------------------------------------------------
 //--- Configuration -----------------------------------------------
 //-----------------------------------------------------------------
 
+# define USE_OLED
 #define str(s) #s
 #define xstr(xs) str(xs)
 
@@ -23,8 +24,6 @@ RemoteDebug Debug;
 
 #ifdef DEV_BOARD
 # define DEV_IDX 2
-# define HLW_SIM
-# define USE_OLED
 # define DEV_BASENAME "DevBoard"
 # define DEV_EXT " CHG"
 # define HOSTNAME "DEVPOW_" DEV_NR 
