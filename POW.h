@@ -49,21 +49,58 @@
 #define Wh2Wms( e ) ((e)*3600*1000)
 
 enum {
-    PROFILE_STD=0,
+    PROFILE_START=0,
+    PROFILE_STD=PROFILE_START,
     PROFILE_QCK,
     PROFILE_P2,
     //--------------
-    N_CHRG_PROFILES
+    PROFILE_TIMEFRAME,
+    PROFILE_TIMEFRAME_1 = PROFILE_TIMEFRAME,
+    PROFILE_TIMEFRAME_2,
+    PROFILE_TIMEFRAME_3,
+    PROFILE_TIMEFRAME_MAX = PROFILE_TIMEFRAME_3,
+    //--------------
+    N_POW_PROFILES
 };
-struct ChgProfile {
+
+struct PowProfile {
+    static const bool TIMF = true;
+    static const bool NRGY = false;
+    static const bool ToD  = true;
+    static const bool REL  = false;
+
+    static const bool REPT  = true;
+    static const bool ONCE  = false;
+    static const bool ARMD  = true;
+    static const bool IDLE  = false;
+
+
+    bool     timeframe;  // true => time oriented plan false => energy oriented
     bool     timeOfDay;
-    unsigned est;   
-    unsigned let;
-    unsigned req;
-    unsigned opt;
+    bool     armed;
+    bool     repeat;
+
+    unsigned est;   // relative time from now in [s] or TimeOfDay in [s] from 0:00
+    unsigned let;   // -"-  
+    unsigned req;   // 
+    unsigned opt;   // 
 
     char est_s[6+1];// storage for times as strings
     char let_s[6+1];// needed for WebGui
+
+    bool used() { return req !=0; }
+    void clear() { req = opt = let = est = 0; armed = repeat = timeframe = timeOfDay = false;   *est_s = *let_s=0; }
+
+    PowProfile() {
+        clear();
+    }
+
+    PowProfile(   bool     i_tf, bool     i_tod,bool   i_armed, bool i_repeat,  unsigned i_est, unsigned i_let, unsigned i_req, unsigned i_opt )
+    :timeframe(i_tf), timeOfDay(i_tod), armed(i_armed), repeat(i_repeat), est(i_est), let(i_let), req(i_req), opt(i_opt)
+    {
+        *est_s=0;
+        *let_s=0;
+    }
 };
 
 /**
@@ -119,6 +156,7 @@ public:
             unsigned char currentWhen = HIGH,
             bool use_interrupts = true,
             unsigned long pulse_timeout = PULSE_TIMEOUT) { 
+              (void)pulse_timeout;
         // Initialize HLW8012
         // void begin(unsigned char cf_pin, unsigned char cf1_pin, unsigned char sel_pin, unsigned char currentWhen = HIGH, bool use_interrupts = false, unsigned long pulse_timeout = PULSE_TIMEOUT);
         // * cf_pin, cf1_pin and sel_pin are GPIOs to the HLW8012 IC
@@ -158,7 +196,7 @@ public:
 
     virtual ~PwrSensCSE7766(){}
 
-    void begin( unsigned char i_rx_pin, unsigned i_baudrate ) { 
+    void begin( unsigned char i_rx_pin, unsigned ) { 
         m_cse.setRX( i_rx_pin );
         m_cse.begin();
     };
@@ -244,6 +282,13 @@ public:
  *        2 - Sonoff POW R2   CES7766
  */
 
+typedef enum  {
+    AD_REQUEST = 1,
+    AD_IDLE    = 0,
+    AD_END_REQUEST = -1
+} ad_event_t;
+
+
 class POW {
 protected:
     PwrSensor* m_sense; 
@@ -277,11 +322,63 @@ protected:
     int m_relayPin;  
     int m_buttonPin;
 
+    int m_activeProfile; ///< index of active Profile
+
+
+    /**
+     * @brief find Timeframe, generate a Energy request and switch off (if appropriate)
+     *
+     */
+    void procAdRequest();
+
+
+    /**
+     * @brief find a matching timeframe for a request
+     * @param  i_nrgy -- true if energy profile is searched
+     * @param  i_req  -- the energy amount/minOnTime of the request 
+     * @return the profile containing a matching timeframe
+     */
+    int findTimeFrame( bool i_nrgy,unsigned i_req  );
+
+    /**
+     * prolong an active PlanningRequest if a device needs more energy to complete the running job.
+     * like washing machines.
+     * A non-interruptible machine with autodetect feature should prolong an active timeframe until operation
+     * completed. ProlongActivePlan() is only used if a request is already active/started but was not sufficient
+     * because the job took longer than expected/planned. This happens for example with washing machines that adapt
+     * to the needs of the specific job at hand. Or a dryer that needs more time because humidity is too high...
+     *
+     */
+    void prolongActivePlan();
+
+    typedef enum {
+        AD_OFF,
+        AD_TEST_ON,
+        AD_ON,
+        AD_TEST_OFF
+    } ad_state_t;
+
+    ad_state_t m_ad_state;
+
 public:
+
+    /**
+     * @brief detect start / end of energy flow for atomated generation of energy requests to EM
+     * ®return AD_REQUEST(1) = energy needed, AD_END_REQUEST(-1) = end of Request , AD_IDLE(0) = no decission
+     */
+    ad_event_t autoDetect(); 
+
+
+public:
+
+    uDelegate  m_application;
 
     attr_reader( int, buttonPin );  
     attr_reader( int, ledState );  
     attr_reader( int, relayState );  
+    
+    attr_reader( int, relayPin );
+    attr_reader( int, ledPin );
 
     attr_reader( unsigned, activePwr );
     attr_reader( unsigned, voltage );
@@ -308,6 +405,7 @@ public:
     void handleCalReq();
     void handleEnergyReq();
     void handleTimeReq();
+    void requestProfile();
 
     void setPwr(bool i_state );
     void toggleRelay();
@@ -315,6 +413,9 @@ public:
     void toggleLED();
 
     void loop();
+
+
+    void dump();
 };
 
 class POW_R1: public POW {

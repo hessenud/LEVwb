@@ -15,6 +15,13 @@ MorseCoder    g_Morse(LED_TICKLEN*2);
  *      - cancel an active request
  *      - increase amount of energy for a request
  *      - ....
+ *      
+ *      CLICK:>  toggle switch ignoring EM Control
+ *      DblCLick:> initiate a standard request
+ *      TripleClick:> Initiate Quick/Immediate Request
+ *      QuadClick:> 
+ *      
+ *      DN_LONG1:>  reset all active Plans
  */
 void buttonControl()
 {
@@ -36,14 +43,15 @@ void buttonControl()
           DEBUG_PRINT(" Relay: %s\n", g_pow->relayState ? "ON" :"OFF");
           g_LED.reset();
           break;
-      case PushButton::DN_LONG2:
+      case PushButton::DN_LONG1:
           DEBUG_PRINT(" Reset all plans %s\n", g_pow->relayState ? "ON" :"OFF");
           g_semp->deleteAllPlans( );
           g_LED.reset();
           break;
-      case PushButton::DN_LONG1:
-          DEBUG_PRINT(" Request 3KWh: %s\n", g_pow->relayState ? "ON" :"OFF");
-          g_Morse.set(".....    - - -");
+      case PushButton::DN_LONG2:
+          g_Morse.set(".....  -----");
+            g_semp->deleteAllPlans( );
+          g_LED.reset();
           {
             unsigned long _now = getTime();
   #ifdef DEV_BOARD
@@ -55,11 +63,22 @@ void buttonControl()
           
           g_LED.reset();
           break;
-     case PushButton::DBLCLICK:
-         // relayState = LOW;
-          g_Morse.next(". - . - . - . - . -", true );
+     case PushButton::DBLCLICK: 
+          g_Morse.next("..  --", true );
           g_LED.reset();
-          DEBUG_PRINT(" Doubleclick!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
+          g_semp->setPwrState( true );
+          DEBUG_PRINT(" DBLCLICK!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
+          break;
+     case PushButton::TRIPLECLICK:
+          g_Morse.next(".. ---", true );
+          g_LED.reset();
+           g_semp->setPwrState( false );
+          DEBUG_PRINT(" TRIPLECLICK!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
+          break;
+     case PushButton::QUADCLICK:
+          g_Morse.next(".. ----", true );
+          g_LED.reset();
+          DEBUG_PRINT(" QUADCLICK!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
           break;
     } 
   }

@@ -1,4 +1,5 @@
-#ifdef USE_OLED
+#ifdef WITH_OLED
+
 void setupOLED()
 {
   if( g_prefs.use_oled ) 
@@ -10,11 +11,11 @@ void setupOLED()
         //Serial.println("SSD1306 allocation failed");
         for(;;); // Don't proceed, loop forever
     }
-
     //display.setRotation(2);
     // Show initial display buffer contents on the screen --
     // the library initializes this with an Adafruit splash screen.
     display.display();
+       delay(500);
   }
 }
 
@@ -23,19 +24,15 @@ void displayTime(unsigned long theTime )
     const char* timestr = TimeClk::getTimeString( theTime );
     // print the hour, minute and second:
     display.print( timestr ); // print the second
-
-
-    //----------------------------
-    // print the hour, minute and second:
-    //Serial.print("The local time is ");       
-    //Serial.println(timestr); 
 }
 
 
 
 void draw( const char* i_text) {
-  if( g_prefs.use_oled )
+   
+  if( g_prefs.use_oled)
   {
+  
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(WHITE);        // Draw white text

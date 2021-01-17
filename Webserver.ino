@@ -65,6 +65,8 @@ void setupWebSrv()
         http_server.on("/getProfiles",HTTP_GET, handleGetProfile );
         http_server.on("/setConfig",  HTTP_GET, handleSetConfig );
 
+        http_server.on("/reqPlans",  HTTP_GET, []() { dailyChores (false); replyOKWithMsg("Plans set");} );
+
         http_server.on("/restart",    HTTP_GET, []() { 
             fileSystem->end();
             ESP.reset();}
@@ -162,7 +164,7 @@ void handleCtl() {
                 requestProfile( 1 );
                 g_semp->setPwrState( true );
             } else if (pVal == "del"){
-                g_semp->resetPlan(0);
+                g_semp->resetPlan(-1); // reset active Plan
                 g_semp->setPwrState( false );
             } else if (pVal == "delAll"){
                 g_semp->deleteAllPlans();
@@ -184,17 +186,17 @@ void handleCtl() {
 
 void handleGetProfile()
 {
-    const int capacity = JSON_ARRAY_SIZE(N_CHRG_PROFILES+1) + (N_CHRG_PROFILES+1)*JSON_OBJECT_SIZE(5);
+    const int capacity = JSON_ARRAY_SIZE(N_POW_PROFILES+1) + (N_POW_PROFILES+1)*JSON_OBJECT_SIZE(5);
     StaticJsonDocument<capacity> doc;
-    for (unsigned n=0; n < N_CHRG_PROFILES; ++n) {
-        doc[n]["timeOfDay"] = g_prefs.chgProfile[n].timeOfDay;
+    for (unsigned n=0; n < N_POW_PROFILES; ++n) {
+        doc[n]["timeOfDay"] = g_prefs.powProfile[n].timeOfDay;
 
-        doc[n]["est"] =  value2timeStr( g_prefs.chgProfile[n].est );
-        doc[n]["let"] =  value2timeStr( g_prefs.chgProfile[n].let );
-        DEBUG_PRINT("EST(%u): %u -> %s\n", n, g_prefs.chgProfile[n].est, g_prefs.chgProfile[n].est_s);
-        DEBUG_PRINT("LET(%u): %u -> %s\n", n, g_prefs.chgProfile[n].let, g_prefs.chgProfile[n].let_s);
-        doc[n]["req"] = g_prefs.chgProfile[n].req;
-        doc[n]["opt"] = g_prefs.chgProfile[n].opt;
+        doc[n]["est"] =  value2timeStr( g_prefs.powProfile[n].est );
+        doc[n]["let"] =  value2timeStr( g_prefs.powProfile[n].let );
+        DEBUG_PRINT("EST(%u): %u -> %s\n", n, g_prefs.powProfile[n].est, g_prefs.powProfile[n].est_s);
+        DEBUG_PRINT("LET(%u): %u -> %s\n", n, g_prefs.powProfile[n].let, g_prefs.powProfile[n].let_s);
+        doc[n]["req"] = g_prefs.powProfile[n].req;
+        doc[n]["opt"] = g_prefs.powProfile[n].opt;
     }
 
     String resp;
@@ -220,9 +222,9 @@ void handleSetConfig()
 #define setPrefStr( __prf, __v )  replaceString( ((char**)&(g_prefs.__prf) ), __v.c_str() )
 #define setPref( __prf, __v )  g_prefs.__prf = __v
 #define pSWITCH(__key, __val )  { String _k = __key; String _v = __val; if ( false ) {
-#define pCASE_str( __prf )  } else if (pName == String( #__prf ) ){ DEBUG_PRINT("str: %s <- %s\n", #__prf, pVal.c_str() );  setPrefStr( __prf, pVal )
-#define pCASE_unsigned( __prf )  } else if (pName == String( #__prf ) ){ DEBUG_PRINT("val: %s <- %u\n", #__prf, atoi(pVal.c_str()) ); setPref( __prf, atoi(pVal.c_str()) )
-#define pCASE_bool( __prf )  } else if (pName == String( #__prf ) ){ DEBUG_PRINT("val: %s <- &s\n", #__prf, pVal.c_str() ); setPref( __prf, (pVal == "true") )
+#define pCASE_str( __prf )  } else if (pName == String( #__prf ) ){  setPrefStr( __prf, pVal )
+#define pCASE_unsigned( __prf )  } else if (pName == String( #__prf ) ){ setPref( __prf, atoi(pVal.c_str()) )
+#define pCASE_bool( __prf )  } else if (pName == String( #__prf ) ){  setPref( __prf, (pVal == "true") )
 #define pDEFAULT } else {
 #define pEND }}
 
@@ -261,6 +263,7 @@ void handleSetProfile()
     unsigned requestedEnergy = 0 KWh;
     unsigned optionalEnergy  = 0 KWh;
     bool     timeOfDay       = false;
+    bool     timeframe       = false;
 
     int prof_idx = -1;
     for( int n = 0; n < http_server.args(); ++n)
@@ -275,25 +278,26 @@ void handleSetProfile()
         } else if (pName == String("optional"))     { optionalEnergy  = value;
         } else if (pName == String("startTime"))    { earliestStart   = TimeClk::timeStr2Value(pVal.c_str());
         } else if (pName == String("endTime"))      { latestStop      = TimeClk::timeStr2Value(pVal.c_str());
-        } else if (pName == String("profile"))      { prof_idx        = value %N_CHRG_PROFILES;
+        } else if (pName == String("profile"))      { prof_idx        = value %N_POW_PROFILES;
         } else if (pName == String("ToD"))          { timeOfDay       = true;
+        } else if (pName == String("timeframe"))    { timeframe       = true;
         } else {
         }
     }
 
-    if ( prof_idx>=0)    g_prefs.chgProfile[prof_idx % N_CHRG_PROFILES] = { timeOfDay, earliestStart, latestStop, requestedEnergy, optionalEnergy,{'\0'},{'\0'} };
+    if ( prof_idx>=0)    g_prefs.powProfile[prof_idx % N_POW_PROFILES] = PowProfile(
+                                      timeframe,  timeOfDay, PowProfile::ARMD, PowProfile::ONCE, 
+                                      earliestStart, latestStop, requestedEnergy, optionalEnergy );
 
-    for(unsigned n=0;n < N_CHRG_PROFILES;++n){
-        DEBUG_PRINT("%s(%u) est: %u let: %u req:%u opt:%u\n", g_prefs.chgProfile[n % N_CHRG_PROFILES].timeOfDay ? "TimeOfDayPlan":"relativePlan"
-                , n, g_prefs.chgProfile[n % N_CHRG_PROFILES].est, g_prefs.chgProfile[n % N_CHRG_PROFILES].let
-                , g_prefs.chgProfile[n % N_CHRG_PROFILES].req, g_prefs.chgProfile[n % N_CHRG_PROFILES].opt);
+    for(unsigned n=0;n < N_POW_PROFILES;++n) {
+               dump_profile( g_prefs.powProfile[n] );
     }
-    replyOKWithMsg(  "OK");
+    replyOKWithJSON(  "{}");
 }
 
 void requestProfile(unsigned i_profile)
 {
-    ChgProfile prof = g_prefs.chgProfile[i_profile % N_CHRG_PROFILES];
+    PowProfile prof = g_prefs.powProfile[i_profile % N_POW_PROFILES];
     unsigned long _now = getTime();
     //unsigned daytime = _now%(1 DAY);
     unsigned long est = prof.est;
@@ -356,7 +360,7 @@ void handleStat() {
     //   String res = "{\"voltage":"pow_a","pwr":"350", "rchg":"345" })";
     String resp;
     mkStat( resp);
-    replyOKWithMsg(  resp);
+    replyOKWithJSON(  resp);
 }
 
 

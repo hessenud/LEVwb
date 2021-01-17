@@ -23,7 +23,9 @@ POW*  newPOW( unsigned i_variant, uSEMP* i_semp )
 }
 
 POW::POW( uSEMP* i_semp)
-:   m_sense(0), m_semp(i_semp), m_activePwr(0), m_voltage(0), m_current(0), m_apparentPwr(0), m_averagePwr(0), m_pwrFactor(0), m_cumulatedEnergy(0),_cumulatedEnergy(0)
+:m_sense(0), m_semp(i_semp), m_activePwr(0), m_voltage(0), m_current(0)
+, m_apparentPwr(0), m_averagePwr(0), m_pwrFactor(0), m_cumulatedEnergy(0),_cumulatedEnergy(0)
+, m_activeProfile(0), m_ad_state(AD_OFF)
 {
     m_last_update=millis();
 }  
@@ -58,11 +60,15 @@ void POW::setup() {
 
     for(unsigned  n=0; n<DIM(m_powers); ++n)
     { 
-        m_powers[n] = m_sense ? m_sense->getActivePower() : 0;
+        m_powers[n] = 0;
     }
+
+    m_sumPwr = 0;
+
+
+    m_application = [this](){  DEBUG_PRINT(" app Delegate"); };
+
 }
-
-
 
 
 void POW::setprefs( unsigned i_cumulatedEnergy, double i_pwrMultiplier, double i_currentMultiplier, double i_voltageMultiplier)
@@ -187,10 +193,14 @@ void POW::handleTimeReq()
 
 }
 
+void POW::requestProfile() {
+
+}
+
 
 void POW::handleEnergyReq()
 {
-  
+
     DEBUG_PRINT("\n\n\n\n\n\n\n\nhandleEnergyReq\n\n\n\n\n\n" );
 
     unsigned earliestStart = 0;
@@ -334,6 +344,159 @@ void POW::handlePwrReq()
     else      replyOKWithMsg(resp);
 }
 
+int  POW::findTimeFrame( bool i_timf, unsigned i_req  )
+{
+    unsigned ret = N_POW_PROFILES;
+
+    // earliest start is NOW
+    // find a timeframe, that's LET has enough time left to fulfill the energy need of this request
+    // the timeframe should end before <i_let> if i_let is not 0
+    // if no matching timeframe is found return is -1
+
+    unsigned long _now = TimeClk::unixtime2daytime(getTime());
+    unsigned long endTime  = _now + i_req;
+    DEBUG_PRINT("find Frame for %u finish by %s (+%s) now:%s (%lus)\n", i_req,
+            Tstr(TimeClk::getTimeString(endTime)), Tstr(TimeClk::getTimeString(i_req)),  Tstr(TimeClk::getTimeString(_now)), _now );
+
+    int idx = i_timf ? PROFILE_TIMEFRAME : PROFILE_START;
+    int endIdx   = i_timf ?  N_POW_PROFILES : PROFILE_TIMEFRAME;
+    for(  /*startIdx*/ ; idx < endIdx; ++idx )
+    {
+        PowProfile& prf = g_prefs.powProfile[idx];
+        DEBUG_PRINT("\t");  dump_profile( prf );
+        if ( prf.armed ) {
+            if ( prf.timeOfDay ) {
+                _DEBUG_PRINT(" end: %s (%lu) vs end: %s(%lu) req:%s(%u) vs len: %lu \n"
+                        , Tstr(TimeClk::getTimeString(prf.let)), prf.let
+                        , Tstr(TimeClk::getTimeString(endTime)), endTime
+                        , Tstr(TimeClk::getTimeString(prf.let - prf.est)),(prf.let - prf.est)
+                        , i_req);
+                if ( (prf.let >= endTime)  && ((prf.let - prf.est) >= i_req)) {
+                    DEBUG_PRINT("\t\t possible candidate absolute daytime %d:\n", idx);
+                    dump_profile( prf );
+                      ret = idx;
+                    break;
+                }
+            } else {
+                DEBUG_PRINT(" relend: %s (%u) vs req:%s(%u) vs len: %s(%u) \n",  Tstr(TimeClk::getTimeString(prf.let)), prf.let
+                        , Tstr(TimeClk::getTimeString(i_req)), i_req
+                        , Tstr(TimeClk::getTimeString(prf.let - prf.est)),(prf.let - prf.est));
+                if ( (prf.let - prf.est) >= i_req) {
+                    DEBUG_PRINT("\n\t possible candidate relative Time %d:\n", idx);
+                       dump_profile( prf );
+                    ret = idx;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (ret < N_POW_PROFILES) {
+        DEBUG_PRINT("found Timeframe %d: ", ret);
+        dump_profile( g_prefs.powProfile[ret] );
+    }
+
+    return ret >= N_POW_PROFILES ? -1 : int(ret);
+}
+
+void POW::prolongActivePlan()
+{
+  DEBUG_PRINT(" prolongActivePlan  by %u\n", g_prefs.ad_prolong_inc);
+    
+    m_semp->updateEnergy( getTime(),  0,  0, g_prefs.ad_prolong_inc );
+}
+
+void POW::procAdRequest()
+{
+    DEBUG_PRINT(" Autodetected  Energy Request\n");
+    // a energy request might be pending at this point:
+    // the EM Device was switched on while waiting on the EM and a job was programmed (e.g. washingmachine) and started
+    // this is not the usual use-case, because normally a Energy request is EIHTER already planned OR created right now
+    // so all plans are deleted and a new request generated.
+    // this can be handled more intelligently... but after brewing over this, i decided it would not be worth the effort
+
+
+    int idx = findTimeFrame( PowProfile::TIMF, Wh2Ws(g_prefs.defCharge)/g_prefs.assumed_power );
+    if ( idx >=0 ) {
+        DEBUG_PRINT(" matching timeframe: %d\n", idx);
+        m_semp->deleteAllPlans();  m_semp->setPwrState( false );
+        g_LED.set( 0x5f, 8, true);
+        PowProfile& prf = g_prefs.powProfile[idx];
+        unsigned long _now = getTime();
+        dump_profile( prf );
+        if ( prf.timeframe ) {
+            DEBUG_PRINT(" modifyPlanTime(0, prf:%d\n", idx);
+            unsigned dayoffset = _now - (_now%(1 DAY));
+            unsigned required = Wh2Ws(g_prefs.defCharge)/g_prefs.assumed_power;
+            m_semp->modifyPlanTime(0, _now, required,  prf.opt,  prf.est + dayoffset, prf.let + dayoffset );
+        } else {
+            DEBUG_PRINT(" modifyPlan(0, prf:%d\n", idx);
+            unsigned required = g_prefs.defCharge;
+            m_semp->modifyPlan(0, _now, required,  prf.opt,  prf.est + _now, prf.let + _now );
+        }
+    }
+}
+
+ad_event_t POW::autoDetect() {
+    ad_event_t ret = AD_IDLE;
+
+    /* detect energy need if request-threshld-power surpassed more than specified time
+     *
+     * detect end of energy need by power falling below lower threshold for more than specified time
+     */
+
+
+    static unsigned long _start;
+    unsigned long        _now = getTime();
+    if ( relayState &&
+         g_prefs.autoDetect ) {
+
+        DEBUG_PRINT(" autoDetect state: %d   PWR: %u   dt=%lu\n", m_ad_state, activePwr, (_now- _start) );
+        switch ( m_ad_state ) {
+        case AD_OFF:      if (  activePwr > g_prefs.ad_on_threshold )   {
+            DEBUG_PRINT(" autoDetect state:AD_OFF  ABOVE THRESHOLD ==> TEST ON\n" );
+            _start = _now; m_ad_state = AD_TEST_ON;
+        }
+        break;
+
+        case AD_TEST_ON:  if ( activePwr > g_prefs.ad_on_threshold )   {
+            DEBUG_PRINT(" autoDetect state:AD_TEST_ON  ABOVE THRESHOLD  %lu(%u)\n", (_now- _start), g_prefs.ad_on_time );
+            if ((_now- _start) > g_prefs.ad_on_time)     {
+                DEBUG_PRINT(" autoDetect state:AD_TEST_ON ==> AD_ON\n" );
+                m_ad_state = AD_ON; _start = _now;
+                ret = AD_REQUEST;
+            }
+        } else {
+            DEBUG_PRINT(" autoDetect state:AD_TEST_ON  BELOW THRESHOLD  ==> AD_OFF\n" );
+            m_ad_state = AD_OFF;    _start = _now;
+
+        }
+        break;
+
+        case AD_ON:       if ( activePwr < g_prefs.ad_off_threshold )  {
+            DEBUG_PRINT(" autoDetect state:AD_ON  BELOW THRESHOLD  ==> AD_TEST_OFF\n" );
+            m_ad_state = AD_TEST_OFF;  _start = _now;
+        }
+        break;
+
+        case AD_TEST_OFF: if ( activePwr < g_prefs.ad_off_threshold )  {
+            DEBUG_PRINT(" autoDetect state:AD_TEST_OFF  BELOW THRESHOLD  %lu(%u)\n", (_now- _start), g_prefs.ad_on_time );
+
+            if ((_now- _start)> g_prefs.ad_off_time)    {
+                DEBUG_PRINT(" autoDetect state:AD_TEST_OFF ==> AD_OFF\n" );
+                m_ad_state = AD_OFF;  _start = _now;
+                ret = AD_END_REQUEST;
+            }
+        } else {
+            DEBUG_PRINT(" autoDetect state:AD_TEST_OFF  ABOVE THRESHOLD  ==> AD_ON\n" );
+            m_ad_state = AD_ON; _start = _now;
+        }
+        break;
+        }
+    }
+    return ret;
+}
+
 void POW::loop() {
     m_sense->loop();  // Polled sensors need some cpu
     unsigned long now=millis();
@@ -347,10 +510,10 @@ void POW::loop() {
         unsigned _time = getTime();
         unsigned requestedEnergy = 0;
         unsigned optionalEnergy  = 0;
-        PlanningData* plan = m_semp->getActivePlan();
-        if (plan){
-            requestedEnergy = plan->m_requestedEnergy;
-            optionalEnergy  = plan->m_optionalEnergy;
+        PlanningData* activePlan = m_semp->getActivePlan();
+        if (activePlan){
+            requestedEnergy = activePlan->m_requestedEnergy;
+            optionalEnergy  = activePlan->m_optionalEnergy;
         }
 
         if ( m_sense ) {
@@ -375,18 +538,48 @@ void POW::loop() {
                 //DEBUG_PRINT("summing actualPower: %u\n", activePwr );
             }
 
-            m_pwrFactor = (int) (100 * (m_sense ? m_sense->getPowerFactor() : 0.001) );
+            m_pwrFactor = (int) (100 *  m_sense->getPowerFactor());
 
 #ifdef USE_POW_DBG
-            DEBUG_PRINT("[HLW] Active Power (W)    : %u\n", activePwr     );
+            DEBUG_PRINT("[HLW] Active Power (W)    : %u  avr: %u\n", activePwr, averagePwr );
             DEBUG_PRINT("[HLW] Voltage (V)         : %u\n", voltage       );
             DEBUG_PRINT("[HLW] Current (A)         : %f\n", current );
             DEBUG_PRINT("[HLW] Apparent Power (VA) : %u\n", apparentPwr );
             DEBUG_PRINT("[HLW] Power Factor (%)    : %f\n", pwrFactor     );
 #endif // USE_POW_DBG
+
+        }
+#ifdef USE_POW_DBG
+        DEBUG_PRINT("[HLW] _cumulatedEnergy    : %ul\n", _cumulatedEnergy     );  
+        DEBUG_PRINT("[HLW] cumulatedEnergy    : %u\n", cumulatedEnergy     );
+        DEBUG_PRINT("[HLW] requestedEnergy    : %u\n", requestedEnergy     );  
+        DEBUG_PRINT("[HLW] optionalEnergy     : %u\n", optionalEnergy     );  
+#endif
+
+        // auto detect
+        int autoDetectState = autoDetect();
+        if ( autoDetectState  == AD_REQUEST ) {
+            procAdRequest();
+        } else if ( autoDetectState  == AD_END_REQUEST ) {
+            DEBUG_PRINT(" Autodetected  End of Energy Request\n");
+            m_semp->resetPlan(); 
+            m_semp->setPwrState( false );
+            g_LED.reset();
+        } else {
+            // prolong active Plan if job not completed
+            if ( activePlan && (activePlan->end() - _time < g_prefs.ad_prolong_inc) ) 
+              activePlan->updateEnergy(  _time, m_semp->pwrState(), 0, 0,  g_prefs.ad_prolong_inc);
+        }
+
+        if ( m_application )   m_application();
+
+
+
+        ////////////////////////////////
+        { 
             _cumulatedEnergy += activePwr*dt;  /// Wms  -> 1/(3600*1000) Wh
             while ( _cumulatedEnergy > Wh2Wms(1) ) {
-
+              
                 ++m_cumulatedEnergy;
                 _cumulatedEnergy -= Wh2Wms(1);
                 if ( requestedEnergy > 0) {
@@ -400,13 +593,9 @@ void POW::loop() {
                 }
             }
         }
-#ifdef USE_POW_DBG
-        DEBUG_PRINT("[HLW] _cumulatedEnergy    : %ul\n", _cumulatedEnergy     );  
-        DEBUG_PRINT("[HLW] cumulatedEnergy    : %u\n", cumulatedEnergy     );
-        DEBUG_PRINT("[HLW] requestedEnergy    : %u\n", requestedEnergy     );  
-        DEBUG_PRINT("[HLW] optionalEnergy     : %u\n", optionalEnergy     );  
-#endif
-        m_semp->updateEnergy( _time, 0,  0 );
+        /////////////////////////////////
+
+        m_semp->updateTime( _time );
         m_semp->setPwr( averagePwr, m_powers[m_minPwrIdx], m_powers[m_maxPwrIdx]);
         _DEBUG_PRINT("POW update end\n");
     }
@@ -416,7 +605,9 @@ void POW::loop() {
 
 void POW::setPwr(bool i_state )
 {
-    if (relayState != i_state ) digitalWrite(m_relayPin, m_relayLogic^(m_relayState = i_state) );
+    if (relayState != i_state ) {
+      digitalWrite(m_relayPin, m_relayLogic^(m_relayState = i_state) );
+    }
 }
 
 void POW::setLED(bool i_state )
@@ -432,7 +623,29 @@ void POW::toggleLED()
     setLED( !ledState );
 }
 
+void dump_profile( PowProfile& i_prf )
+{
+#define value2timeStr( vs )   (snprintf_P( (vs##_s), sizeof(vs##_s), PSTR("%2lu:%02lu"), (((vs)  % 86400L) / 3600), (((vs)  % 3600) / 60) ), (vs##_s))
 
+    DEBUG_PRINT("Profiles:");
+    DEBUG_PRINT("%5s %3s %4s %3s %7u-%7u |  %7s/%7s  r:%u/o:%u\n",
+            i_prf.timeframe ? "TMR" : "NRGY",
+                    i_prf.timeOfDay ? "ToD" :"rel",
+                    i_prf.armed ? "ARMD" :"IDLE",
+                    i_prf.repeat ? "REPT" :"ONCE",
+                    
+                            i_prf.est, i_prf.let,
+                            value2timeStr( i_prf.est ), value2timeStr( i_prf.let ),
+                            i_prf.req,
+                            i_prf.opt
+    );
+}
+
+void POW::dump() 
+{
+    DEBUG_PRINT("Profiles:");
+
+}
 
 
 

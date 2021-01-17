@@ -5,11 +5,12 @@
 //--- Configuration -----------------------------------------------
 //-----------------------------------------------------------------
 
-# define USE_OLED
+#define WITH_OLED
 #define str(s) #s
 #define xstr(xs) str(xs)
 
 #define DEBUG_SUPPORT
+
 #ifdef DEBUG_SUPPORT
 # define USE_LIB_WEBSOCKET true
 # include "RemoteDebug.h"        //https://github.com/JoaoLopesF/RemoteDebug
@@ -18,27 +19,27 @@ RemoteDebug Debug;
 #endif
 
 #ifndef DEBUG_PRINT
-# define DEBUG_PRINT(...) // Serial.printf(__VA_ARGS__)
+# define DEBUG_PRINT(...)  Serial.printf(__VA_ARGS__)
 #endif
-#define _DEBUG_PRINT(...)
+
 
 #ifdef DEV_BOARD
 # define DEV_IDX 2
 # define DEV_BASENAME "DevBoard"
 # define DEV_EXT " CHG"
 # define HOSTNAME "DEVPOW_" DEV_NR 
-# define LED_LEVEL(l) (l)
-# define MQTTBROKER  "raspi"
-# define MQTTPORT    1883
 #else
 // the real deal
 # define DEV_IDX 2
 # define DEV_EXT
 # define DEV_BASENAME "ThePOW"
 # define HOSTNAME "TPOW_" DEV_NR 
-# define MQTTBROKER  "raspi"
-# define MQTTPORT    1883
 #endif
+
+
+#define MQTTBROKER  "raspi"
+#define MQTTPORT    1883
+
 /****************************************************************/
 #include <EEPROM.h>
 
@@ -47,12 +48,7 @@ RemoteDebug Debug;
 #include <uHelper.h>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
-#ifdef USE_ASYNC
-///@todo completely adopt ASNYC Webserver - this also makes more memory efficiency possible 
-//# include <WiFiManager.h>
-#else
-# include <WiFiManager.h>
-#endif
+#include <WiFiManager.h>
 
 
 #include <WebSocketsServer.h>
@@ -125,7 +121,7 @@ PowMqtt g_mqtt;
 
 
 
-#ifdef USE_OLED
+#ifdef WITH_OLED
 ///
 // OLED Display support
 #include <Adafruit_SSD1306.h>
@@ -147,19 +143,19 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 
 void setup() {
-    // Serial.begin(115200);
-   
+    Serial.begin(115200);
+
     ////////////////////////////////
     // FILESYSTEM INIT
     DEBUG_PRINT("Initializing filesystem...\n");
     fileSystemConfig.setAutoFormat(false);
     fileSystem->setConfig(fileSystemConfig);
-    
+
     fsOK = fileSystem->begin();
     DEBUG_PRINT(fsOK ? ("Filesystem initialized.\n") : ("Filesystem init failed!\n"));
- 
+
     loadPrefs();
-      
+
     ///////////////////////////////
     // SEMP init
     snprintf_P( ChipID, sizeof(ChipID), PSTR("%08x"), ESP.getChipId() );
@@ -172,16 +168,16 @@ void setup() {
     g_semp = new uSEMP( udn_uuid, DeviceID, g_prefs.device_name, DeviceSerial, uSEMP::devTypeStr(g_prefs.devType), Vendor, g_prefs.maxPwr, &semp_server, SEMP_PORT );
     g_pow = newPOW( g_prefs.modelVariant, g_semp );
     g_semp->setCallbacks( getTime, ([](bool s) {  g_pow->setPwr(s);  }));
-  
+
 
     ///////////////////////////////
     // 
-    
+
     setupOLED();
     setupWIFI();
 
     setupTimeClk( TIMEZONE );
-  
+
     setupIO();
     setupWebSrv();
 
@@ -192,9 +188,9 @@ void setup() {
     setupDebug();
     setupSSDP();
     setupOTA();
-    
+
     // requestDailyPlan(false);
-    
+
 }
 
 
@@ -210,7 +206,6 @@ const char* state2txt( int state)
 
 void loop() 
 {
-
     static unsigned long lastLoop;
     unsigned long thisLoop = millis();
     if (thisLoop - lastLoop > 50 ) {
@@ -222,17 +217,26 @@ void loop()
     loopOTA();
     loopWebSrv();
     loopDebug();
-    unsigned long now = getTime();
+    unsigned long _now = getTime();
     char buffer[20*40];
     char* wp = &buffer[0];
 
-    g_semp->dumpPlans( wp ) ;
-    draw( buffer );
-    if ( now - ltime > 5  ) {
+    wp += g_semp->dumpPlans( wp ) ;
+    for ( unsigned n=0; n< N_TMR_PROFILES; ++n) {
+      extern uTimer  g_Timers[N_TMR_PROFILES];
+      wp += uTimer::dump( wp, g_Timers[n] );
+    
+    }
+    wp += sprintf_P(wp, PSTR("-------------------\n"));
+    const char* days[] = {"Mo","Tu","We","Th","Fr","Sa","So" };
+    int day_of_week = ( (_now/(1 Day)) + 3) % 7; 
+    wp += sprintf_P(wp, PSTR("* %s %s *"), days[day_of_week],TimeClk::getTimeString( _now ) );
+    draw( buffer );  
+    if ( _now - ltime > 5  ) {
         if (g_pow)  DEBUG_PRINT("LED: %s  Relay: %s\n", state2txt(!g_pow->ledState), state2txt( !g_pow->relayState) );
         DEBUG_PRINT("OLED:\n%s\n", buffer );
 
-        ltime = now;
+        ltime = _now;
 
         // socket_server.send
         String st;
@@ -240,10 +244,10 @@ void loop()
         DEBUG_PRINT("STATUS: msg len:%u\n---------------------------\n%s\n--------------------------\n", st.length(), st.c_str());
         socket_server.broadcastTXT(st.c_str(), st.length());
     }
-       
-   if (g_pow) g_pow->loop();
-   g_mqtt.loop();
-   g_semp->loop();
+
+    if (g_pow) g_pow->loop();
+    g_mqtt.loop();
+    g_semp->loop();
 }
 
 
@@ -273,6 +277,6 @@ void setupDebug()
 void loopDebug()
 {
 #ifdef DEBUG_SUPPORT
-  Debug.handle(); // Remote debug over telnet 
+    Debug.handle(); // Remote debug over telnet
 #endif
 }

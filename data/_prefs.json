@@ -1,0 +1,18 @@
+{
+  "revision": 3,
+  "assumed_power": 1000,
+  "mqtt_broker": "",
+  "mqtt_broker_port": 0,
+  "mqtt_user": "",
+  "mqtt_password": "",
+  "updateTime": 1000,
+  "devType": 12,
+  "intr": true,
+  "defCharge": 290,
+  "autoDetect": false,
+  "ad_on_threshold": 0,
+  "ad_on_time": 0,
+  "ad_off_threshold": 0,
+  "ad_off_time": 0,
+  "ad_prolong_inc": 0
+}

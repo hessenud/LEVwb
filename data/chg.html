@@ -70,7 +70,30 @@ function doRequest(url, upd) {
 	<div class="footer">
 		<button  id="save" type="button" onclick="commitProfiles()">Save</button>
 	</div>
-
+	<hr>TimeFrame1: <input type="checkbox" id="ToDTF1"> absolute<br>	
+	<div class="col2" id="profileStd">
+	    <label>Req: <input type="number"  id="requestedTF1" step="500" value="0"></label>  <br>
+		<label>Start:<input type="time"	  id="startTimeTF1">	</label><br>
+		<label> Opt:<input	type="number" id="optionalTF1" step="500" value="0"></label> <br>
+		<label > End:<input type="time"	  id="latestEndTF1"> </label> <br>
+	</div>
+	<hr>TimeFrame2 <input type="checkbox" id="ToDTF2"> absolute<br>
+	<div class="col2" id="profileQck">
+		<label>  Req:<input type="number" id="requestedTF2" step="500" value="0"> </label><br> 
+		<label>Start:<input type="time"   id="startTimeTF2"> </label><br>
+		<label> Opt:<input	type="number" id="optionalTF2" step="500" value="0"></label> <br>
+		<label > End:<input type="time"   id="latestEndTF2"></label><br> 
+	</div>
+	<hr>TimeFrame3:   <input type="checkbox" id="ToDTF3"> absolute<br>
+	<div class="col2" id="profileProg2">
+		<label>  Req:<input type="number" id="requestedTF3" step="500" value="0"> </label> <br>
+		<label>Start:<input type="time"   id="startTimeTF3"> </label><br>
+		<label> Opt:<input	type="number" id="optionalTF3" step="500" value="0"></label> <br>
+		<label > End:<input type="time"   id="latestEndTF3">	</label> <br>
+	</div>	
+	<div class="footer">
+		<button  id="save" type="button" onclick="commitProfiles()">Save</button>
+	</div>
 </body>
 <script>
 	function reqCharge(req, opt, est, let, tod) {

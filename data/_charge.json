@@ -1,0 +1,64 @@
+{
+  "powProfile": [
+    {
+      "timeOfDay": true,
+      "timeframe": false,
+      "armed": false,
+      "repeat": false,
+      "est": 39600,
+      "let": 54000,
+      "req": 3000,
+      "opt": 6000
+    },
+    {
+      "timeOfDay": true,
+      "timeframe": false,
+      "armed": false,
+      "repeat": false,
+      "est": 10800,
+      "let": 7000,
+      "req": 12345,
+      "opt": 56789
+    },
+    {
+      "timeOfDay": false,
+      "timeframe": false,
+      "armed": false,
+      "repeat": false,
+      "est": 0,
+      "let": 10800,
+      "req": 4000,
+      "opt": 6500
+    },
+    {
+      "timeOfDay": false,
+      "timeframe": false,
+      "armed": true,
+      "repeat": false,
+      "est": 180,
+      "let": 1800,
+      "req": 300,
+      "opt": 0
+    },
+    {
+      "timeOfDay": false,
+      "timeframe": false,
+      "armed": false,
+      "repeat": false,
+      "est": 0,
+      "let": 0,
+      "req": 0,
+      "opt": 0
+    },
+    {
+      "timeOfDay": false,
+      "timeframe": false,
+      "armed": false,
+      "repeat": false,
+      "est": 0,
+      "let": 0,
+      "req": 0,
+      "opt": 0
+    }
+  ]
+}
