@@ -12,7 +12,8 @@ function goMain(p) {
 }
 
 function doRequest(url, upd) {
-	// var pref = "http://192.168.178.35/"; url = pref + url;
+	//var pref = "http://192.168.178.35/"; url = pref + url;
+	// alert(" doRequest: " +url );
 	fetch(url, {mode: 'no-cors'} )
 	  .then(function(response) {
 		  return response.json();
@@ -21,8 +22,8 @@ function doRequest(url, upd) {
 		  if (upd) upd(resp);  //updateProfiles(resp);
 	  })
 	  .catch(function(error) {
-	    console.log('Request failed', error)
-	  alert(url + "  " + 'Request failed');
+	    console.log('Request failed', error);
+	    alert('Request failed:' + error);
 	  });
 }
 </script>
@@ -37,59 +38,60 @@ function doRequest(url, upd) {
 
 	<hr>Charge: <input type="checkbox" id="ToD"> absolute
 	<div class="col2" id="request">
-		<label> Req:<input type="number" id="requested" step="500" value="0">	</label> <br>
+		<label> Req:<input type="number" id="requested" step="500" value="0">Wh	</label> <br>
 		<label>Start:<input type="time" id="startTime"></label><br>
-		<label> Opt:<input type="number" id="optional" step="500" value="0">  </label><br>
+		<label> Opt:<input type="number" id="optional" step="500" value="0">Wh  </label><br>
 		<label> End:<input type="time"	id="latestEnd"></label> <br><br>
 	</div>
 	<div class="directCtl">
 		<button id="commit" type="button" onclick="commitChg()">Charge</button>
 	</div>
 	
-	<hr>Std: <input type="checkbox" id="ToDStd"> absolute<br>	
-	<div class="col2" id="profileStd">
-	    <label>Req: <input type="number"  id="requestedStd" step="500" value="0"></label>  <br>
-		<label>Start:<input type="time"	  id="startTimeStd">	</label><br>
-		<label> Opt:<input	type="number" id="optionalStd" step="500" value="0"></label> <br>
-		<label > End:<input type="time"	  id="latestEndStd"> </label> <br>
+	
+	<hr>Std: <input type="checkbox" id="ToDTF0"> absolute <input type="checkbox" id="armTF0">armed<input type="checkbox" id="repTF0">repeat<br>	
+	<div class="col2" id="profileTF0">
+		<label>Req: <input type="number"  id="requestedTF0" step="500" value="0">Wh</label>  <br>
+		<label>Start:<input type="time"	  id="startTimeTF0">	</label><br>
+		<label> Opt:<input	type="number" id="optionalTF0" step="500" value="0">Wh</label> <br>
+		<label > End:<input type="time"	  id="latestEndTF0"> </label> <br>
 	</div>
-	<hr>Qck <input type="checkbox" id="ToDQck"> absolute<br>
-	<div class="col2" id="profileQck">
-		<label>  Req:<input type="number" id="requestedQck" step="500" value="0"> </label><br> 
-		<label>Start:<input type="time"   id="startTimeQck"> </label><br>
-		<label> Opt:<input	type="number" id="optionalQck" step="500" value="0"></label> <br>
-		<label > End:<input type="time"   id="latestEndQck"></label><br> 
+	<hr>Qck: <input type="checkbox" id="ToDTF1"> absolute <input type="checkbox" id="armTF1">armed<input type="checkbox" id="repTF1">repeat<br>	
+		<div class="col2" id="profileTF1">
+		<label>  Req:<input type="number" id="requestedTF1" step="500" value="0">Wh </label><br> 
+		<label>Start:<input type="time"   id="startTimeTF1"> </label><br>
+		<label> Opt:<input	type="number" id="optionalTF1" step="500" value="0">Wh</label> <br>
+		<label > End:<input type="time"   id="latestEndTF1"></label><br> 
 	</div>
-	<hr>Prg2:   <input type="checkbox" id="ToDP2"> absolute<br>
-	<div class="col2" id="profileProg2">
-		<label>  Req:<input type="number" id="requestedP2" step="500" value="0"> </label> <br>
-		<label>Start:<input type="time"   id="startTimeP2"> </label><br>
-		<label> Opt:<input	type="number" id="optionalP2" step="500" value="0"></label> <br>
-		<label > End:<input type="time"   id="latestEndP2">	</label> <br>
+	<hr>Prg2: <input type="checkbox" id="ToDTF2"> absolute <input type="checkbox" id="armTF2"> armed<input type="checkbox" id="repTF2">repeat<br>	
+	<div class="col2" id="profileTF2">
+		<label>  Req:<input type="number" id="requestedTF2" step="500" value="0">Wh </label> <br>
+		<label>Start:<input type="time"   id="startTimeTF2"> </label><br>
+		<label> Opt:<input	type="number" id="optionalTF2" step="500" value="0">Wh</label> <br>
+		<label > End:<input type="time"   id="latestEndTF2">	</label> <br>
 	</div>	
 	<div class="footer">
 		<button  id="save" type="button" onclick="commitProfiles()">Save</button>
 	</div>
-	<hr>TimeFrame1: <input type="checkbox" id="ToDTF1"> absolute<br>	
-	<div class="col2" id="profileStd">
-	    <label>Req: <input type="number"  id="requestedTF1" step="500" value="0"></label>  <br>
-		<label>Start:<input type="time"	  id="startTimeTF1">	</label><br>
-		<label> Opt:<input	type="number" id="optionalTF1" step="500" value="0"></label> <br>
-		<label > End:<input type="time"	  id="latestEndTF1"> </label> <br>
-	</div>
-	<hr>TimeFrame2 <input type="checkbox" id="ToDTF2"> absolute<br>
-	<div class="col2" id="profileQck">
-		<label>  Req:<input type="number" id="requestedTF2" step="500" value="0"> </label><br> 
-		<label>Start:<input type="time"   id="startTimeTF2"> </label><br>
-		<label> Opt:<input	type="number" id="optionalTF2" step="500" value="0"></label> <br>
-		<label > End:<input type="time"   id="latestEndTF2"></label><br> 
-	</div>
-	<hr>TimeFrame3:   <input type="checkbox" id="ToDTF3"> absolute<br>
-	<div class="col2" id="profileProg2">
-		<label>  Req:<input type="number" id="requestedTF3" step="500" value="0"> </label> <br>
-		<label>Start:<input type="time"   id="startTimeTF3"> </label><br>
+	<hr>TimeFrame1: <input type="checkbox" id="ToDTF3"> absolute <input type="checkbox" id="armTF3"> armed<input type="checkbox" id="repTF3">repeat<br>	
+	<div class="col2" id="profile3">
+	    <label>Req: <input type="number"  id="requestedTF3" step="500" value="0"></label>  <br>
+		<label>Start:<input type="time"	  id="startTimeTF3">	</label><br>
 		<label> Opt:<input	type="number" id="optionalTF3" step="500" value="0"></label> <br>
-		<label > End:<input type="time"   id="latestEndTF3">	</label> <br>
+		<label > End:<input type="time"	  id="latestEndTF3"> </label> <br>
+	</div>
+	<hr>TimeFrame2 <input type="checkbox" id="ToDTF4"> absolute <input type="checkbox" id="armTF4"> armed<input type="checkbox" id="repTF4">repeat<br>
+	<div class="col2" id="profile4">
+		<label>  Req:<input type="number" id="requestedTF4" step="500" value="0"> </label><br> 
+		<label>Start:<input type="time"   id="startTimeTF4"> </label><br>
+		<label> Opt:<input	type="number" id="optionalTF4" step="500" value="0"></label> <br>
+		<label > End:<input type="time"   id="latestEndTF4"></label><br> 
+	</div>
+	<hr>TimeFrame3:   <input type="checkbox" id="ToDTF5"> absolute <input type="checkbox" id="armTF5"> armed<input type="checkbox" id="repTF5">repeat<br>
+	<div class="col2" id="profile5">
+		<label>  Req:<input type="number" id="requestedTF5" step="500" value="0"> </label> <br>
+		<label>Start:<input type="time"   id="startTimeTF5"> </label><br>
+		<label> Opt:<input	type="number" id="optionalTF5" step="500" value="0"></label> <br>
+		<label > End:<input type="time"   id="latestEndTF5">	</label> <br>
 	</div>	
 	<div class="footer">
 		<button  id="save" type="button" onclick="commitProfiles()">Save</button>
@@ -128,6 +130,7 @@ function doRequest(url, upd) {
   		var est  = document.getElementById("startTime").value;
   		var let  = document.getElementById("latestEnd").value;
   		var tod  = document.getElementById("ToD").checked;
+  		
   	 	
   		if ( let == "undefined" ) {  let = 0;}
   		reqCharge( req, opt, est, let, tod );
@@ -135,47 +138,33 @@ function doRequest(url, upd) {
  	
 
 	function updateProfiles(obj) {
-		document.getElementById("requestedStd").value = obj[0].req;
-		document.getElementById("optionalStd").value = obj[0].opt;
-		document.getElementById("startTimeStd").value = obj[0].est;
-		document.getElementById("latestEndStd").value = obj[0].let;
-		document.getElementById("ToDStd").checked = obj[0].timeOfDay;
-		
-    	document.getElementById("requestedQck").value = obj[1].req;
-		document.getElementById("optionalQck").value = obj[1].opt;
-		document.getElementById("startTimeQck").value = obj[1].est;
-		document.getElementById("latestEndQck").value = obj[1].let;
-		document.getElementById("ToDQck").checked = obj[1].timeOfDay;
-		
-    	document.getElementById("requestedP2").value = obj[2].req;
-		document.getElementById("optionalP2").value = obj[2].opt;
-		document.getElementById("startTimeP2").value = obj[2].est;
-		document.getElementById("latestEndP2").value = obj[2].let;
-		document.getElementById("ToDP2").checked = obj[2].timeOfDay;
-		
+		alert(  JSON.stringify(obj) );
+		var nPrf = 6;
+		for (var n=0; n< nPrf; ++n){
+			console.log(" Profile " + n + "--\n");
+	    	document.getElementById("requestedTF"+n).value 	= obj[n].req;
+			document.getElementById("optionalTF"+n).value 	= obj[n].opt;
+			document.getElementById("startTimeTF"+n).value 	= obj[n].est;
+			document.getElementById("latestEndTF"+n).value 	= obj[n].let;
+			document.getElementById("ToDTF"+n).checked 		= obj[n].timeOfDay;
+			document.getElementById("armTF"+n).checked 		= obj[n].armed;
+			document.getElementById("repTF"+n).checked 		= obj[n].repeat;
+		}
 	}
 	
 	function commitProfiles(){
- 		var req  = document.getElementById("requestedStd").value;
- 		var opt  = document.getElementById("optionalStd").value;
- 		var est  = document.getElementById("startTimeStd").value;
- 		var let  = document.getElementById("latestEndStd").value;
- 		var tod  = document.getElementById("ToDStd").checked;
- 		commitProf(0,req, opt, est, let, tod );
-
- 		req  = document.getElementById("requestedQck").value;
-		opt  = document.getElementById("optionalQck").value;
-		est  = document.getElementById("startTimeQck").value;
-		let  = document.getElementById("latestEndQck").value;
-		tod  = document.getElementById("ToDQck").checked;
-  		commitProf(1,req, opt, est, let, tod );
-
- 		req  = document.getElementById("requestedP2").value;
-		opt  = document.getElementById("optionalP2").value;
-		est  = document.getElementById("startTimeP2").value;
-		let  = document.getElementById("latestEndP2").value;
-		tod  = document.getElementById("ToDP2").checked;
-		commitProf(2,req, opt, est, let, tod );
+		var nPrf = 6;
+		for (var n=0; n< nPrf; ++n){
+			var req  	= document.getElementById("requestedTF"+n).value;
+			var opt  	= document.getElementById("optionalTF"+n).value;
+			var est  	= document.getElementById("startTimeTF"+n).value;
+			var let  	= document.getElementById("latestEndTF"+n).value;
+			var tod  	= document.getElementById("ToDTF"+n).checked;
+			var armed  	= document.getElementById("armTF"+n).armed;
+			var repeat  = document.getElementById("repTF"+n).checked;
+			commitProf(n,req, opt, est, let, tod );
+			
+		}
  	}
 
  	function init() {

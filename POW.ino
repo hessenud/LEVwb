@@ -627,7 +627,7 @@ void dump_profile( PowProfile& i_prf )
 {
 #define value2timeStr( vs )   (snprintf_P( (vs##_s), sizeof(vs##_s), PSTR("%2lu:%02lu"), (((vs)  % 86400L) / 3600), (((vs)  % 3600) / 60) ), (vs##_s))
 
-    DEBUG_PRINT("Profiles:");
+    DEBUG_PRINT("Profile:");
     DEBUG_PRINT("%5s %3s %4s %3s %7u-%7u |  %7s/%7s  r:%u/o:%u\n",
             i_prf.timeframe ? "TMR" : "NRGY",
                     i_prf.timeOfDay ? "ToD" :"rel",

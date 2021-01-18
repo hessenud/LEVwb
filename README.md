@@ -8,7 +8,21 @@ Arduino ist _not_ suited for developing something much bigger as "Blink.ino" but
 ...still it's easy for anybody to customize the code, what's really necessary as there is still no run-time-configuration implemented.
 So right now, there's only a statically compiled config thats done using Arduino (or alike) in the "_LEVwb.ino_"  file and then downloaded to the target.
 
-Currently this Firmware is for Rev1 of Sonoff POW. Recently I got a Rev2 with a different power meter chip (CSE7766). As soon as the cleanup-operation on this source is sufficiently advanced, i will integrate this...
+Currently this Firmware works with Sonoff POW Revision 1 _and_ Revision 2.There is also support for other Appliances like Dishwasher, Dryer, Pumps, Heating....
+... but the GUI doesn't support this (yet)  the Alternative GUI is the integrated FileBrowser, that let's you edit the JSON config files directly on the device.
+
+Features:
+===========
+* works on Sonoff POW R1 + R2   CSE7766 and HLW8012 
+* speaks SMA's SEMP protocol and integrates nicely in SMA EnergyManager installations
+* minimum WebGUI for Chargers (LEVwb - Wallbox Light Electric Vehicles)   
+* support all SEMP defined DeviceTypes
+* Timer ( work-in-progress )
+* autodetection for energy requests, with programmable thresholds (Power/Time)
+* ...
+* incomplete documentation... yes it's a feature and no BUG ;-)
+
+Actually everything is work-in-progress ;-) yet... and will be for a loong loooong time
 
 
 Building and installation

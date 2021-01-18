@@ -26,8 +26,7 @@ void dailyChores( bool )
     unsigned long _now = getTime();
     
     DEBUG_PRINT(" daily chores: \n");
-    return;
-    
+
     
   /* this is merily a test function
    * daily timeframes need good planning and coordination with autodetect/ manual request etc...
@@ -35,7 +34,7 @@ void dailyChores( bool )
    * leave it this way until a use case crystalizes itself while usgn and experimenting....
    */
     if(g_semp) {
-      for (unsigned n=PROFILE_TIMEFRAME; n < N_TMR_PROFILES; ++n) {    
+      for (unsigned n=PROFILE_TIMEFRAME; n < N_POW_PROFILES; ++n) {    
         PowProfile& prf =  g_prefs.powProfile[n];
         DEBUG_PRINT("requesting profile %u - > plan: %u ", n, (1+n-PROFILE_TIMEFRAME));         dump_profile( prf );  
         if (prf.armed) {
@@ -49,12 +48,15 @@ void dailyChores( bool )
                     ,TimeClk::daytime2unixtime( prf.let, _now ) );
           }
 
-          if( !prf.repeat ) prf.armed = false;
+          if( !prf.repeat ) {
+            prf.armed = false;
+          }
         }
       }
    }
-
-   for (unsigned n=0; n < PROFILE_TIMEFRAME_MAX; ++n) {   
+   
+   DEBUG_PRINT("Profiles:\n------------------------------------------\n");    
+   for (unsigned n=0; n < N_POW_PROFILES; ++n) {   
     dump_profile( g_prefs.powProfile[n] );
    }
 }

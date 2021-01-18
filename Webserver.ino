@@ -62,10 +62,10 @@ void setupWebSrv()
         http_server.on("/stat",       HTTP_GET, handleStat );
         http_server.on("/ctl",        HTTP_GET, handleCtl );
         http_server.on("/setProfile", HTTP_GET, handleSetProfile );
-        http_server.on("/getProfiles",HTTP_GET, handleGetProfile );
+        http_server.on("/getProfiles",HTTP_GET, handleGetProfiles );
         http_server.on("/setConfig",  HTTP_GET, handleSetConfig );
 
-        http_server.on("/reqPlans",  HTTP_GET, []() { dailyChores (false); replyOKWithMsg("Plans set");} );
+        http_server.on("/reqDaily",  HTTP_GET, []() { dailyChores (false); replyOKWithMsg("Plans set");} );
 
         http_server.on("/restart",    HTTP_GET, []() { 
             fileSystem->end();
@@ -184,27 +184,30 @@ void handleCtl() {
 
 #define value2timeStr( vs )   (snprintf_P( (vs##_s), sizeof(vs##_s), PSTR("%2lu:%02lu"), (((vs)  % 86400L) / 3600), (((vs)  % 3600) / 60) ), (vs##_s))
 
-void handleGetProfile()
+void handleGetProfiles()
 {
-    const int capacity = JSON_ARRAY_SIZE(N_POW_PROFILES+1) + (N_POW_PROFILES+1)*JSON_OBJECT_SIZE(5);
+    const int capacity = JSON_ARRAY_SIZE(N_POW_PROFILES+1) + (N_POW_PROFILES+1)*JSON_OBJECT_SIZE(8);
     StaticJsonDocument<capacity> doc;
     for (unsigned n=0; n < N_POW_PROFILES; ++n) {
-        doc[n]["timeOfDay"] = g_prefs.powProfile[n].timeOfDay;
+        doc[n]["timeOfDay"] = g_prefs.powProfile[n].timeOfDay; 
+        doc[n]["armed"]     = g_prefs.powProfile[n].armed;
+        doc[n]["repeat"]    = g_prefs.powProfile[n].repeat;
 
-        doc[n]["est"] =  value2timeStr( g_prefs.powProfile[n].est );
-        doc[n]["let"] =  value2timeStr( g_prefs.powProfile[n].let );
+        doc[n]["est"]       =  value2timeStr( g_prefs.powProfile[n].est );
+        doc[n]["let"]       =  value2timeStr( g_prefs.powProfile[n].let );
+        doc[n]["req"]       = g_prefs.powProfile[n].req;
+        doc[n]["opt"]       = g_prefs.powProfile[n].opt;
+        
         DEBUG_PRINT("EST(%u): %u -> %s\n", n, g_prefs.powProfile[n].est, g_prefs.powProfile[n].est_s);
         DEBUG_PRINT("LET(%u): %u -> %s\n", n, g_prefs.powProfile[n].let, g_prefs.powProfile[n].let_s);
-        doc[n]["req"] = g_prefs.powProfile[n].req;
-        doc[n]["opt"] = g_prefs.powProfile[n].opt;
     }
 
     String resp;
     if (serializeJsonPretty(doc, resp) == 0) {
         DEBUG_PRINT(PSTR("Failed to serialize"));
     }
-
-    DEBUG_PRINT(PSTR("Profiles: \n%s\n"), resp.c_str());
+    
+    DEBUG_PRINT(PSTR("Profiles(%u): \n%s\n"),N_POW_PROFILES, resp.c_str());
     replyOKWithMsg(  resp);
 }
 
