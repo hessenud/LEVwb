@@ -21,7 +21,6 @@ class Prefs {
 public:
 
     Prefs();
-    unsigned    revision; 
     const char* hostname;
     const char* ota_passwd;
     unsigned    assumed_power;      ///< assumed consumption for time calculation

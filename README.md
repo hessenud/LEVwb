@@ -50,8 +50,56 @@ Calibration of the power meter is in EEPROM but all the other config and the gui
 
 ### Upload Image and additional files
 The files in "data/" have to be uploaded to the LittleFS filesystem. You can do it using the LittlFS uploading tool from within Arduino IDE. I've "assimilated" the FSBrowser example of LittleFS, for uploading and editing individual files.
-Edit data/config.json as needed.
+Edit data/_*.json files as needed.
 There is still some configuration done at compile time. Look at the defines in LEVwb.ino and edit whatever suits your needs. 
+
+#### Configuration
+There is a config section in the WebGUI for the devices configuration  _http://TPOW-1.local/cfg.html_
+But the WebGUI is not really maintained or particularly well and beautifully designed...
+So the "official" config-GUI is via the online editor of the integrated FSbrowser: _http://TPOW-1.local/edit_.
+Every config option is available and tweakable by editing the 4 config files:
+
+##### _device.json	- device description
+-  modelVariant: (0 - Simualtion, 1 - Sonoff Pow rev1, 2 - rev2)   
+-  maxPwr: 			maximum power consumption for SEMP Device description
+-  hostname: 		MDNS hostname
+-  device_name:  	name of SEMP device
+-  model_name: 	 	your choice for a (SSDP) model name... 
+
+##### _preferences	- device parameters
+-  assumed_power: 	1000,
+-  mqtt_broker:    	hostname or IP address of MQTT broker
+-  mqtt_broker_port: port number
+-  mqtt_user:		user name for MQTT broker ( optional )		 
+-  mqtt_password: 	( optional )
+-  updateTime: 		( future use )
+-  devType: 			SEMP device number  12: other  5:EVCharger
+-  intr: 			interruptible
+-  defCharge: 		energy for an auto-detected energy request
+-  autoDetect: 		true/false   enable autodetect feature
+-  ad_on_threshold: 	power threshold for auto detecting a request
+-  ad_on_time: 		seconds for power threshold until auto detect is valid
+-  ad_off_threshold:	lower power threshold for auto detecting end of 
+ 					active power request
+-   ad_off_time: 	seconds for lower power threshold until end of 
+  					active request is valid
+- ad_prolong_inc: 	if an uninterruptible device has not finished the 
+  					active request at the end of the
+  					planned timeframe ( e.g. laundr-O-mat needs another round )
+  				    prolong the active frame by nn seconds
+
+
+
+#### Calibration
+Like suggested in the Sonoff POW Users Manual. Take a voltmeter, a known load or a calibrated amperemeter and enter the Values in the calibration section on the config page: _http://TPOW-1.local/cfg.html_
+* exp. Power		-  known power consumptin of a well defined load like a light bulb
+* exp. Voltage	-  the actual measured voltage at point of load
+* exp. Current	-  either the measured current or Power/Current ( beware- use load without apparent power component)
+
+and press _CALIBRATE!_ button
+
+   
+	
 
 
 
@@ -119,6 +167,7 @@ You have to calibrate the measurement with a known load or with another measurem
             -- current    = active current (8.8)[A]
             -- voltage    = active voltage (228)[V]
     
+
 
 
 ToDo

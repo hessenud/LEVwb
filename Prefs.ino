@@ -10,7 +10,6 @@
 int eeprom_wp = 0;
 Prefs::Prefs()
 {
-    revision=0; 
     hostname=0; 
     ota_passwd=0; 
     assumed_power=0; 
@@ -153,9 +152,6 @@ void saveParams()
 
     DynamicJsonDocument cfg(Prefs::capacity);
 
-
-    storePref(  revision );
-
     //--- device setting
     storePref(  assumed_power); 
     storePref(  mqtt_broker); 
@@ -195,10 +191,6 @@ void loadParams()
     if ((error != DeserializationError::Ok )) { 
         saveParams();
     } else {
-
-        loadPref( revision, 0 );
-
-
         loadPref(     assumed_power, MAX_CONSUMPTION ); 
         loadPrefStr(  mqtt_broker, ""  );
         loadPref(     mqtt_broker_port, 0);
@@ -361,11 +353,8 @@ void loadPrefs()
         File file = LittleFS.open(PREFERENCES_FILE,"r");
         // Deserialize the JSON document
         DeserializationError error = deserializeJson(cfg, file);
-        if ((error != DeserializationError::Ok )) { // || (cfg["revision"] < 1  )) {
-            g_prefs.revision = cfg["revision"];
-
-            DEBUG_PRINT("Failed to read file, using default configuration  REV:%u error: %s\n",  g_prefs.revision,  error.c_str()   );
-            g_prefs.revision = PREFS_REVISION;
+        if ((error != DeserializationError::Ok )) { 
+            DEBUG_PRINT("Failed to read file, using default configuration  error: %s\n",   error.c_str()   );
             g_prefs.hostname = HOSTNAME;
             g_prefs.device_name   = DEVICE_NAME;
             g_prefs.model_name    = HOSTNAME " DevBoard" ;
@@ -390,7 +379,6 @@ void loadPrefs()
             savePrefs();
         } else {
             DEBUG_PRINT(" use stored Prefs!!!\n");
-            loadPref( revision, 0 );
             loadPrefStr(  ota_passwd, "wadsdapassvoid");
             loadPrefStr(  hostname, HOSTNAME);
             loadPref(     assumed_power, MAX_CONSUMPTION );
@@ -443,80 +431,4 @@ void savePrefs() {
     saveParams();
     saveChgPrf();
     saveTimers();
-
-
-    // Allocate a temporary JsonDocument
-    DynamicJsonDocument cfg(Prefs::capacity);
-    // Set the values in the document
-
-    storePref(  revision );
-
-    //--- device description
-    storePref(  ota_passwd );
-    storePref(  hostname );
-
-    storePref(  device_name);
-    storePref(  model_name);
-    storePref(  serialNr  );
-    storePref(  modelVariant);
-    storePref(  maxPwr ); 
-    storePref(  use_oled ); 
-
-    //--- device setting
-    storePref(  assumed_power); 
-    storePref(  mqtt_broker); 
-    storePref(  mqtt_broker_port);
-    storePref(  mqtt_user); 
-    storePref(  mqtt_password);
-    storePref(  updateTime);
-
-    storePref(  devType ); 
-    storePref(  intr   ); 
-    storePref(  defCharge );
-
-    storePref( autoDetect );         
-    storePref( ad_on_threshold );
-    storePref( ad_on_time );
-    storePref( ad_off_threshold );
-    storePref( ad_off_time );
-    storePref( ad_prolong_inc );
-
-    // ---  Timer settings
-    for (unsigned n = 0; n < N_TMR_PROFILES; ++n) {
-        storeProfileXMember( tmrProfile, n, sw_time );
-        storeProfileXMember( tmrProfile, n, interval );
-        storeProfileXMember( tmrProfile, n, mo );
-        storeProfileXMember( tmrProfile, n, tu );
-        storeProfileXMember( tmrProfile, n, we );
-        storeProfileXMember( tmrProfile, n, th );
-        storeProfileXMember( tmrProfile, n, fr );
-        storeProfileXMember( tmrProfile, n, sa );
-        storeProfileXMember( tmrProfile, n, su );
-        storeProfileXMember( tmrProfile, n, everyday );
-        storeProfileXMember( tmrProfile, n, repeat );
-        storeProfileXMember( tmrProfile, n, armed );
-        storeProfileXMember( tmrProfile, n, switchmode ); ///< true = on false = off
-    }
-
-    // charge profiles
-    for (unsigned n = 0; n < N_POW_PROFILES; ++n) {
-#define storeProfileMember( __member )    cfg["profiles"][n][ #__member ] = g_prefs.powProfile[n].__member 
-        storeProfileMember( timeOfDay );
-        storeProfileMember( timeframe );
-        storeProfileMember( armed );
-        storeProfileMember( repeat );
-        storeProfileMember( est );   
-        storeProfileMember( let) ;
-        storeProfileMember( req );
-        storeProfileMember( opt );
-    }
-
-
-    // Serialize JSON to file
-    File file = fileSystem->open(PREFERENCES_FILE, "w+");
-    if (serializeJsonPretty(cfg, file) == 0) {
-        Serial.println( F("Failed to write to file") );
-    }
-
-    file.close();
 }

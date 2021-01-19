@@ -1,5 +1,4 @@
 {
-  "revision": 3,
   "assumed_power": 1000,
   "mqtt_broker": "",
   "mqtt_broker_port": 0,
