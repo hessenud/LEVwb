@@ -46,6 +46,7 @@ void buttonControl()
       case PushButton::DN_LONG1:
           DEBUG_PRINT(" Reset all plans %s\n", g_pow->relayState ? "ON" :"OFF");
           g_semp->deleteAllPlans( );
+          g_pow->resetAutoDetectionState();
           g_LED.reset();
           break;
       case PushButton::DN_LONG2:
@@ -66,13 +67,15 @@ void buttonControl()
      case PushButton::DBLCLICK: 
           g_Morse.next("..  --", true );
           g_LED.reset();
-          g_semp->setPwrState( true );
+          g_semp->setEmState( EM_ON  );
+          g_pow->setPwr( true );
           DEBUG_PRINT(" DBLCLICK!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
           break;
      case PushButton::TRIPLECLICK:
           g_Morse.next(".. ---", true );
           g_LED.reset();
-           g_semp->setPwrState( false );
+           g_semp->setEmState( EM_OFF  );
+           g_pow->setPwr( false );
           DEBUG_PRINT(" TRIPLECLICK!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
           break;
      case PushButton::QUADCLICK:

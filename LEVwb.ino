@@ -167,7 +167,9 @@ void setup() {
 
     g_semp = new uSEMP( udn_uuid, DeviceID, g_prefs.device_name, DeviceSerial, uSEMP::devTypeStr(g_prefs.devType), Vendor, g_prefs.maxPwr, &semp_server, SEMP_PORT );
     g_pow = newPOW( g_prefs.modelVariant, g_semp );
-    g_semp->setCallbacks( getTime, ([](bool s) {  g_pow->setPwr(s);  }));
+    g_semp->setCallbacks( getTime
+            ,([]( EM_state_t ems) {  g_pow->setEmState(ems);  })
+            ,([]( ) {  g_pow->endOfPlan();  }));
 
 
     ///////////////////////////////

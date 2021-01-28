@@ -25,7 +25,7 @@ POW*  newPOW( unsigned i_variant, uSEMP* i_semp )
 POW::POW( uSEMP* i_semp)
 :m_sense(0), m_semp(i_semp), m_activePwr(0), m_voltage(0), m_current(0)
 , m_apparentPwr(0), m_averagePwr(0), m_pwrFactor(0), m_cumulatedEnergy(0),_cumulatedEnergy(0)
-, m_activeProfile(0), m_ad_state(AD_OFF)
+, m_activeProfile(0), m_ad_state(AD_OFF), m_em_online(true)
 {
     m_last_update=millis();
 }  
@@ -38,7 +38,7 @@ void POW::setup() {
 
     // Open the relay to switch on the load
     m_relayState = RELAY_OFF;
-    m_semp->setPwrState( relayState );
+    m_semp->setEmState( EM_OFF );
 
     m_pwrIdx = 0;
     m_averagePwr = 0;
@@ -363,15 +363,16 @@ int  POW::findTimeFrame( bool i_timf, unsigned i_req  )
     for(  /*startIdx*/ ; idx < endIdx; ++idx )
     {
         PowProfile& prf = g_prefs.powProfile[idx];
-        DEBUG_PRINT("\t");  dump_profile( prf );
-        if ( prf.armed ) {
+        DEBUG_PRINT("\t");  
+        dump_profile( prf );
+        if ( prf.valid ) {
             if ( prf.timeOfDay ) {
                 _DEBUG_PRINT(" end: %s (%lu) vs end: %s(%lu) req:%s(%u) vs len: %lu \n"
                         , Tstr(TimeClk::getTimeString(prf.let)), prf.let
                         , Tstr(TimeClk::getTimeString(endTime)), endTime
                         , Tstr(TimeClk::getTimeString(prf.let - prf.est)),(prf.let - prf.est)
                         , i_req);
-                if ( (prf.let >= endTime)  && ((prf.let - prf.est) >= i_req)) {
+                if ( (prf.let >= endTime) && ((prf.let - prf.est) >= i_req)) {
                     DEBUG_PRINT("\t\t possible candidate absolute daytime %d:\n", idx);
                     dump_profile( prf );
                       ret = idx;
@@ -419,7 +420,9 @@ void POW::procAdRequest()
     int idx = findTimeFrame( PowProfile::TIMF, Wh2Ws(g_prefs.defCharge)/g_prefs.assumed_power );
     if ( idx >=0 ) {
         DEBUG_PRINT(" matching timeframe: %d\n", idx);
-        m_semp->deleteAllPlans();  m_semp->setPwrState( false );
+        m_semp->deleteAllPlans(); 
+        g_pow->setPwr( false );
+        m_semp->setEmState( EM_OFF );
         g_LED.set( 0x5f, 8, true);
         PowProfile& prf = g_prefs.powProfile[idx];
         unsigned long _now = getTime();
@@ -563,12 +566,13 @@ void POW::loop() {
         } else if ( autoDetectState  == AD_END_REQUEST ) {
             DEBUG_PRINT(" Autodetected  End of Energy Request\n");
             m_semp->resetPlan(); 
-            m_semp->setPwrState( false );
+            g_pow->setPwr( false );
+            m_semp->setEmState( EM_OFF  ); // ONLINE but OFF
             g_LED.reset();
         } else {
             // prolong active Plan if job not completed
             if ( activePlan && (activePlan->end() - _time < g_prefs.ad_prolong_inc) ) 
-              activePlan->updateEnergy(  _time, m_semp->pwrState(), 0, 0,  g_prefs.ad_prolong_inc);
+              activePlan->updateEnergy(  _time, m_semp->getEmState(), 0, 0,  g_prefs.ad_prolong_inc);
         }
 
         if ( m_application )   m_application();
@@ -610,6 +614,23 @@ void POW::setPwr(bool i_state )
     }
 }
 
+/**
+ * EM signals to pow the state of SEMP device
+ * OFFLINE = no control by EM
+ * 
+ */
+void POW::setEmState(EM_state_t i_em_state, unsigned /*i_recommendedPwr*/ )
+{
+  if ( m_em_online && (i_em_state != EM_OFFLINE) ) {
+       setPwr( i_em_state == EM_ON ); 
+  }
+}
+
+void  POW::endOfPlan(  )
+{
+    g_LED.reset();
+}
+
 void POW::setLED(bool i_state )
 {
     if (ledState != i_state ) digitalWrite(m_ledPin, m_ledLogic ^(m_ledState = i_state) );
@@ -628,12 +649,11 @@ void dump_profile( PowProfile& i_prf )
 #define value2timeStr( vs )   (snprintf_P( (vs##_s), sizeof(vs##_s), PSTR("%2lu:%02lu"), (((vs)  % 86400L) / 3600), (((vs)  % 3600) / 60) ), (vs##_s))
 
     DEBUG_PRINT("Profile:");
-    DEBUG_PRINT("%5s %3s %4s %3s %7u-%7u |  %7s/%7s  r:%u/o:%u\n",
+    DEBUG_PRINT("%s %5s %3s %4s %3s %7u-%7u |  %7s/%7s  r:%u/o:%u\n", i_prf.valid ? "[]" : "[ ]",
             i_prf.timeframe ? "TMR" : "NRGY",
                     i_prf.timeOfDay ? "ToD" :"rel",
                     i_prf.armed ? "ARMD" :"IDLE",
                     i_prf.repeat ? "REPT" :"ONCE",
-                    
                             i_prf.est, i_prf.let,
                             value2timeStr( i_prf.est ), value2timeStr( i_prf.let ),
                             i_prf.req,

@@ -162,13 +162,15 @@ void handleCtl() {
                 requestProfile( 0 );
             } else if (pVal == "qck"){
                 requestProfile( 1 );
-                g_semp->setPwrState( true );
+                g_semp->setEmState( EM_ON );
             } else if (pVal == "del"){
                 g_semp->resetPlan(-1); // reset active Plan
-                g_semp->setPwrState( false );
+                g_semp->setEmState(  EM_OFF  );
+                g_pow->setPwr(false);
             } else if (pVal == "delAll"){
                 g_semp->deleteAllPlans();
-                g_semp->setPwrState( false );
+                g_semp->setEmState( EM_OFF );
+                g_pow->setPwr(false);
             } else {
                 requestProfile( atoi(pVal.c_str())  );
 

@@ -139,7 +139,6 @@ void loadDevice()
         loadPref(     modelVariant,  0 ); 
 
         loadPref(     maxPwr, MAX_CONSUMPTION );
-        loadPref(     devType,  uSEMP::Other); 
         _loadPref(     use_oled ); 
 
     }
@@ -196,6 +195,8 @@ void loadParams()
         loadPref(     mqtt_broker_port, 0);
         loadPrefStr(  mqtt_user, ""    ); 
         loadPrefStr(  mqtt_password, ""); 
+        
+        loadPref(     devType,  uSEMP::Other); 
         _loadPref(     intr   );
         loadPref(     defCharge, 2000 ); 
         _loadPref(     autoDetect);         
@@ -219,6 +220,7 @@ void saveChgPrf()
 
     // profiles
     for (unsigned n = 0; n < N_POW_PROFILES; ++n) {
+        storeProfileXMember( powProfile, n, valid );
         storeProfileXMember( powProfile, n, timeOfDay );
         storeProfileXMember( powProfile, n, timeframe );
         storeProfileXMember( powProfile, n, armed );
@@ -236,6 +238,22 @@ void saveChgPrf()
     }
 
     file.close();
+}
+
+void extractChgPrf(DynamicJsonDocument& cfg)
+{
+    for (unsigned n = 0; n < N_POW_PROFILES; ++n) {
+      
+        loadProfileXMember(powProfile, n, valid);
+        loadProfileXMember(powProfile, n, timeOfDay);
+        loadProfileXMember(powProfile, n, timeframe);
+        loadProfileXMember(powProfile, n, armed);
+        loadProfileXMember(powProfile, n, repeat);
+        loadProfileXMember(powProfile, n, est);
+        loadProfileXMember(powProfile, n, let);
+        loadProfileXMember(powProfile, n, req);
+        loadProfileXMember(powProfile, n, opt);
+    }
 }
 
 void loadChgPrf()
@@ -263,6 +281,7 @@ void saveTimers()
 
     DynamicJsonDocument cfg(Prefs::capacity);
     for (unsigned n = 0; n < N_TMR_PROFILES; ++n) {
+        storeProfileXMember(tmrProfile, n, valid);
         storeProfileXMember( tmrProfile, n, sw_time );
         storeProfileXMember( tmrProfile, n, interval );
         storeProfileXMember( tmrProfile, n, mo );
@@ -289,6 +308,7 @@ void saveTimers()
 void extractTimers(DynamicJsonDocument& cfg)
 {
     for (unsigned n = 0; n < N_TMR_PROFILES; ++n) {
+        loadProfileXMember(tmrProfile, n, valid);
         loadProfileXMember(tmrProfile, n, sw_time);
         loadProfileXMember(tmrProfile, n, interval);
         loadProfileXMember(tmrProfile, n, mo);
@@ -322,19 +342,7 @@ void loadTimers()
     file.close();
 }
 
-void extractChgPrf(DynamicJsonDocument& cfg)
-{
-    for (unsigned n = 0; n < N_POW_PROFILES; ++n) {
-        loadProfileXMember(powProfile, n, timeOfDay);
-        loadProfileXMember(powProfile, n, timeframe);
-        loadProfileXMember(powProfile, n, armed);
-        loadProfileXMember(powProfile, n, repeat);
-        loadProfileXMember(powProfile, n, est);
-        loadProfileXMember(powProfile, n, let);
-        loadProfileXMember(powProfile, n, req);
-        loadProfileXMember(powProfile, n, opt);
-    }
-}
+
 
 void loadPrefs()
 {

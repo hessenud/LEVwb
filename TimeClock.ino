@@ -37,17 +37,17 @@ void dailyChores( bool )
       for (unsigned n=PROFILE_TIMEFRAME; n < N_POW_PROFILES; ++n) {    
         PowProfile& prf =  g_prefs.powProfile[n];
         DEBUG_PRINT("requesting profile %u - > plan: %u ", n, (1+n-PROFILE_TIMEFRAME));         dump_profile( prf );  
-        if (prf.armed) {
+        if ( prf.armed ) {
+          // if armed and repeat => this frame shoudld be scheduled daily
           if ( prf.timeframe ) {
               g_semp->modifyPlanTime((1+n-PROFILE_TIMEFRAME), _now, prf.req,  prf.opt
                   ,TimeClk::daytime2unixtime( prf.est, _now)
                   ,TimeClk::daytime2unixtime( prf.let, _now ) );
           } else {
               g_semp->modifyPlan((1+n-PROFILE_TIMEFRAME), _now, prf.req,  prf.opt
-                    ,TimeClk::daytime2unixtime( prf.est, _now)
-                    ,TimeClk::daytime2unixtime( prf.let, _now ) );
+                    , prf.est + _now
+                    , prf.let +  _now );
           }
-
           if( !prf.repeat ) {
             prf.armed = false;
           }

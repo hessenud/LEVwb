@@ -74,11 +74,11 @@ struct PowProfile {
     static const bool ARMD  = true;
     static const bool IDLE  = false;
 
-
-    bool     timeframe;  // true => time oriented plan false => energy oriented
-    bool     timeOfDay;
-    bool     armed;
-    bool     repeat;
+    bool     valid;     ///< thsi frame is valid for planning
+    bool     timeframe; ///< true => time oriented plan false => energy oriented
+    bool     timeOfDay; ///< true let and est are offset [s] form 00:00 as a Time of day otherwise its relative time [s] from now
+    bool     armed;     ///< armed for planning generation
+    bool     repeat;    ///< re-arm this frame after completion  
 
     unsigned est;   // relative time from now in [s] or TimeOfDay in [s] from 0:00
     unsigned let;   // -"-  
@@ -368,7 +368,13 @@ public:
      */
     ad_event_t autoDetect(); 
 
-
+    /**
+     * true means the device is under control of the EM
+     * false => the device runs w/o EM control. E.g. on forced operation even when EM suggests OFF
+     *          of when using a pure Timer, or alternative decision
+     */
+    bool m_em_online;
+    
 public:
 
     uDelegate  m_application;
@@ -401,6 +407,7 @@ public:
     unsigned calcOnTime( unsigned requestedEnergy, unsigned avr_pwr);
     void setprefs( unsigned i_cumulatedEnergy, double i_pwrMultiplier, double i_currentMultiplier, double i_voltageMultiplier);
 
+    void resetAutoDetectionState() { m_ad_state = AD_OFF; }
     void handlePwrReq();
     void handleCalReq();
     void handleEnergyReq();
@@ -408,6 +415,9 @@ public:
     void requestProfile();
 
     void setPwr(bool i_state );
+    void setEmState(EM_state_t i_em_state, unsigned i_recommendedPwr=0 );
+    void endOfPlan(  );
+    
     void toggleRelay();
     void setLED(bool i_state );
     void toggleLED();
