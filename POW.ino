@@ -358,43 +358,72 @@ int  POW::findTimeFrame( bool i_timf, unsigned i_req  )
     DEBUG_PRINT("find Frame for %u finish by %s (+%s) now:%s (%lus)\n", i_req,
             Tstr(TimeClk::getTimeString(endTime)), Tstr(TimeClk::getTimeString(i_req)),  Tstr(TimeClk::getTimeString(_now)), _now );
 
-    int idx = i_timf ? PROFILE_TIMEFRAME : PROFILE_START;
-    int endIdx   = i_timf ?  N_POW_PROFILES : PROFILE_TIMEFRAME;
-    for(  /*startIdx*/ ; idx < endIdx; ++idx )
-    {
-        PowProfile& prf = g_prefs.powProfile[idx];
-        DEBUG_PRINT("\t");  
-        dump_profile( prf );
-        if ( prf.valid ) {
-            if ( prf.timeOfDay ) {
-                _DEBUG_PRINT(" end: %s (%lu) vs end: %s(%lu) req:%s(%u) vs len: %lu \n"
-                        , Tstr(TimeClk::getTimeString(prf.let)), prf.let
-                        , Tstr(TimeClk::getTimeString(endTime)), endTime
-                        , Tstr(TimeClk::getTimeString(prf.let - prf.est)),(prf.let - prf.est)
-                        , i_req);
-                if ( (prf.let >= endTime) && ((prf.let - prf.est) >= i_req)) {
-                    DEBUG_PRINT("\t\t possible candidate absolute daytime %d:\n", idx);
-                    dump_profile( prf );
-                      ret = idx;
-                    break;
-                }
-            } else {
-                DEBUG_PRINT(" relend: %s (%u) vs req:%s(%u) vs len: %s(%u) \n",  Tstr(TimeClk::getTimeString(prf.let)), prf.let
-                        , Tstr(TimeClk::getTimeString(i_req)), i_req
-                        , Tstr(TimeClk::getTimeString(prf.let - prf.est)),(prf.let - prf.est));
-                if ( (prf.let - prf.est) >= i_req) {
-                    DEBUG_PRINT("\n\t possible candidate relative Time %d:\n", idx);
-                       dump_profile( prf );
-                    ret = idx;
-                    break;
-                }
-            }
-        }
-    }
+    int _idx = i_timf ? PROFILE_TIMEFRAME : PROFILE_START;
+    int _endIdx   = i_timf ?  N_POW_PROFILES : PROFILE_TIMEFRAME;
+    /** @todo: find the earliest timeframe
+     *  if no frame for today is found, try another run:
+     *  for timeOfDay Frames add 1 DAY to EST and LET and try to find a frame the next day
+     */
 
-    if (ret < N_POW_PROFILES) {
+    long dT = 0; ///<  Offset for est and let to find a frame the next day(s)
+    unsigned candidate[N_TIMEFRAMES];
+    unsigned nCandidates = 0;
+    do {
+      for( int idx = _idx, endIdx = _endIdx; idx < endIdx; ++idx )
+      {
+          PowProfile& prf = g_prefs.powProfile[idx];
+          DEBUG_PRINT("\t");  
+          dump_profile( prf );
+          if ( prf.valid ) {
+              if ( prf.timeOfDay ) {
+                  _DEBUG_PRINT(" end: %s (%lu) vs end: %s(%lu) req:%s(%u) vs len: %lu \n"
+                          , Tstr(TimeClk::getTimeString(prf.let)), prf.let
+                          , Tstr(TimeClk::getTimeString(endTime)), endTime
+                          , Tstr(TimeClk::getTimeString(prf.let - prf.est)),(prf.let - prf.est)
+                          , i_req);
+                  if ( ((prf.let+dT) >= endTime) && ((prf.let - prf.est) >= i_req)) {
+                      DEBUG_PRINT("\t\t possible candidate absolute daytime %d:\n", idx);
+                      dump_profile( prf );
+                      if ( ret >= N_POW_PROFILES ) ret = idx;
+                      candidate[nCandidates++] = idx;  
+                      //break;
+                  }
+              } else {
+                  DEBUG_PRINT(" relend: %s (%u) vs req:%s(%u) vs len: %s(%u) \n",  Tstr(TimeClk::getTimeString(prf.let)), prf.let
+                          , Tstr(TimeClk::getTimeString(i_req)), i_req
+                          , Tstr(TimeClk::getTimeString(prf.let - prf.est)),(prf.let - prf.est));
+                  if ( (prf.let - prf.est) >= i_req) {
+                      DEBUG_PRINT("\n\t possible candidate relative Time %d:\n", idx);
+                      dump_profile( prf );
+                      candidate[nCandidates++] = idx;  
+                      if ( ret >= N_POW_PROFILES ) ret = idx;
+                      break;
+                  }
+              }
+          }
+      }
+      dT += 1 Day; // try again tomorrow
+      if ( ret >= N_POW_PROFILES )  DEBUG_PRINT(" no frame found try again tomorrow\n");
+    } while (  ( ret >= N_POW_PROFILES ) && (dT <= 1 Day) );
+
+
+    // find the best candidate!
+    ret = N_POW_PROFILES;
+    for ( unsigned n=0; n < nCandidates; ++n){     
+      if (n == 0) DEBUG_PRINT("found matching Timeframes:\n");
+      DEBUG_PRINT("ftf(%u) idx: %u: ", n, candidate[n]); dump_profile( g_prefs.powProfile[candidate[n]] );
+      if ( ret < N_POW_PROFILES ) {
+        if ( g_prefs.powProfile[ret].est > g_prefs.powProfile[candidate[n]].est ) {
+          ret = candidate[n];
+          DEBUG_PRINT("better match:%u \t", ret );  dump_profile( g_prefs.powProfile[ret] );
+        }
+      } else {
+        ret = candidate[n];  // first candidate
+      }
+    }
+    if (ret < N_TIMEFRAMES) {
         DEBUG_PRINT("found Timeframe %d: ", ret);
-        dump_profile( g_prefs.powProfile[ret] );
+        dump_profile( g_prefs.powProfile[candidate[ret]] );
     }
 
     return ret >= N_POW_PROFILES ? -1 : int(ret);
@@ -431,6 +460,7 @@ void POW::procAdRequest()
             DEBUG_PRINT(" modifyPlanTime(0, prf:%d\n", idx);
             unsigned dayoffset = _now - (_now%(1 DAY));
             unsigned required = Wh2Ws(g_prefs.defCharge)/g_prefs.assumed_power;
+            if ( prf.est + dayoffset < _now ) dayoffset += 1 Day; 
             m_semp->modifyPlanTime(0, _now, required,  prf.opt,  prf.est + dayoffset, prf.let + dayoffset );
         } else {
             DEBUG_PRINT(" modifyPlan(0, prf:%d\n", idx);
@@ -649,7 +679,7 @@ void dump_profile( PowProfile& i_prf )
 #define value2timeStr( vs )   (snprintf_P( (vs##_s), sizeof(vs##_s), PSTR("%2lu:%02lu"), (((vs)  % 86400L) / 3600), (((vs)  % 3600) / 60) ), (vs##_s))
 
     DEBUG_PRINT("Profile:");
-    DEBUG_PRINT("%s %5s %3s %4s %3s %7u-%7u |  %7s/%7s  r:%u/o:%u\n", i_prf.valid ? "[]" : "[ ]",
+    DEBUG_PRINT("%s %5s %3s %4s %3s %7u-%7u |  %7s/%7s  r:%u/o:%u\n", i_prf.valid ? "[*]" : "[ ]",
             i_prf.timeframe ? "TMR" : "NRGY",
                     i_prf.timeOfDay ? "ToD" :"rel",
                     i_prf.armed ? "ARMD" :"IDLE",
