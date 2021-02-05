@@ -1,6 +1,7 @@
 {
   "powProfile": [
     {
+      "valid": false,
       "timeOfDay": true,
       "timeframe": false,
       "armed": false,
@@ -11,6 +12,7 @@
       "opt": 6000
     },
     {
+      "valid": false,
       "timeOfDay": true,
       "timeframe": false,
       "armed": false,
@@ -21,6 +23,7 @@
       "opt": 56789
     },
     {
+      "valid": false,
       "timeOfDay": false,
       "timeframe": false,
       "armed": false,
@@ -31,6 +34,7 @@
       "opt": 6500
     },
     {
+      "valid": false,
       "timeOfDay": false,
       "timeframe": false,
       "armed": true,
@@ -41,6 +45,7 @@
       "opt": 0
     },
     {
+      "valid": false,
       "timeOfDay": false,
       "timeframe": false,
       "armed": false,
@@ -51,6 +56,7 @@
       "opt": 0
     },
     {
+      "valid": false,
       "timeOfDay": false,
       "timeframe": false,
       "armed": false,

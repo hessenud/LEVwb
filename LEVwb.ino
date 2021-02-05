@@ -171,7 +171,7 @@ void setup() {
             ,([]( EM_state_t ems) {  g_pow->setEmState(ems);  })
             ,([]( ) {  g_pow->endOfPlan();  }));
 
-
+     g_semp->setEmState( EM_OFF );
     ///////////////////////////////
     // 
 

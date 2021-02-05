@@ -397,7 +397,7 @@ int  POW::findTimeFrame( bool i_timf, unsigned i_req  )
                       dump_profile( prf );
                       candidate[nCandidates++] = idx;  
                       if ( ret >= N_POW_PROFILES ) ret = idx;
-                      break;
+                      //break;
                   }
               }
           }
