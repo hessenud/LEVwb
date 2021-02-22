@@ -313,8 +313,8 @@ protected:
     void calibrate(    double expectedVoltage, double expectedPwr, double expectedCurrent );
 
     unsigned long m_sumPwr;
-    unsigned  m_minPwrIdx;
-    unsigned  m_maxPwrIdx;
+    unsigned  m_minPwr;
+    unsigned  m_maxPwr;
     unsigned  m_powers[DIM_PWRS];
     unsigned  m_pwrIdx;
     unsigned long m_last_update;
@@ -369,21 +369,15 @@ public:
      */
     ad_event_t autoDetect(); 
 
-    /**
-     * true means the device is under control of the EM
-     * false => the device runs w/o EM control. E.g. on forced operation even when EM suggests OFF
-     *          of when using a pure Timer, or alternative decision
-     */
-    bool m_em_online;
     
 public:
-
+    
     uDelegate  m_application;
 
-    attr_reader( int, buttonPin );  
-    attr_reader( int, ledState );  
-    attr_reader( int, relayState );  
+    attr_reader( int, ledState );
+    attr_reader( int, relayState );
     
+    attr_reader( int, buttonPin );  
     attr_reader( int, relayPin );
     attr_reader( int, ledPin );
 
@@ -401,7 +395,6 @@ public:
     double   currentMultiplier(){ return m_sense ? m_sense->getCurrentMultiplier(): 1;};
     double   voltageMultiplier(){ return m_sense ? m_sense->getVoltageMultiplier(): 1;};
 
-
     POW( uSEMP* i_semp );
     void setup();
 
@@ -415,8 +408,29 @@ public:
     void handleTimeReq();
     void requestProfile();
 
+   /**
+     * true means the device is under control of the EM
+     * false => the device runs w/o EM control. E.g. on forced operation even when EM suggests OFF
+     *          of when using a pure Timer, or alternative decision
+     */
+    bool online;
+    
+    /**
+     * @param i_state   bool true -> relay/pwr on
+     */
     void setPwr(bool i_state );
-    void setEmState(EM_state_t i_em_state, unsigned i_recommendedPwr=0 );
+
+    /**
+     * signal EnergyManager State to POW 
+     * @param i_em_state    ON/OFF/OFFLINE
+     * @param i_recommendedPwr  recommended power
+     *
+     */
+    void rxEmState(EM_state_t i_em_state, unsigned i_recommendedPwr=0 );
+
+    /**
+     * signal active plan is exhausted
+     */
     void endOfPlan(  );
     
     void toggleRelay();

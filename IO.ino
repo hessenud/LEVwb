@@ -5,7 +5,7 @@ PushButton* key;
   //  
   
 BlinkSignal    g_LED(LED_TICKLEN);
-MorseCoder    g_Morse(LED_TICKLEN*2);
+MorseCoder     g_Morse(LED_TICKLEN*2);
 
 
 /**
@@ -25,8 +25,6 @@ MorseCoder    g_Morse(LED_TICKLEN*2);
  */
 void buttonControl()
 {
-
-  {
     int keyEvt = key->getEvent();
     switch ( keyEvt ) {
       case PushButton::UP:
@@ -41,17 +39,18 @@ void buttonControl()
       case PushButton::CLICK:
           g_pow->toggleRelay();// relayState = !relayState;
           DEBUG_PRINT(" Relay: %s\n", g_pow->relayState ? "ON" :"OFF");
+          pushStat();
           g_LED.reset();
           break;
       case PushButton::DN_LONG1:
-          DEBUG_PRINT(" Reset all plans %s\n", g_pow->relayState ? "ON" :"OFF");
+          DEBUG_PRINT(" Reset all plans %s\n", g_pow->relayState  ? "ON" :"OFF");
           g_semp->deleteAllPlans( );
           g_pow->resetAutoDetectionState();
           g_LED.reset();
           break;
       case PushButton::DN_LONG2:
           g_Morse.set(".....  -----");
-            g_semp->deleteAllPlans( );
+          g_semp->deleteAllPlans( );
           g_LED.reset();
           {
             unsigned long _now = getTime();
@@ -67,14 +66,12 @@ void buttonControl()
      case PushButton::DBLCLICK: 
           g_Morse.next("..  --", true );
           g_LED.reset();
-          g_semp->setEmState( EM_ON  );
           g_pow->setPwr( true );
           DEBUG_PRINT(" DBLCLICK!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
           break;
      case PushButton::TRIPLECLICK:
           g_Morse.next(".. ---", true );
           g_LED.reset();
-           g_semp->setEmState( EM_OFF  );
            g_pow->setPwr( false );
           DEBUG_PRINT(" TRIPLECLICK!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
           break;
@@ -84,7 +81,6 @@ void buttonControl()
           DEBUG_PRINT(" QUADCLICK!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
           break;
     } 
-  }
 }
 
   

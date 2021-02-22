@@ -132,7 +132,6 @@ void handleCfg()
 
 void handleAux()
 {
-
     String resp = String("[HLW] Active Power (W)    : ") + String(g_pow->activePwr) +
             String("\n[HLW] Voltage (V)         : ") + String(g_pow->voltage) +
             String("\n[HLW] Current (A)         : ") + String(g_pow->current) +
@@ -157,23 +156,29 @@ void handleCtl() {
             g_pow->setPwr(true);
         } else if (pName == String("off")) {
             g_pow->setPwr(false);
+        } else if (pName == String("togOnline")) {
+          if ( g_pow->online ) {
+             g_pow->online = false;
+             g_semp->acceptEMSignal( false );
+          } else {
+            g_pow->online = true;
+            g_semp->acceptEMSignal( true );
+            g_semp->setEmState( g_pow->relayState ? EM_ON : EM_OFF );
+          }
         } else if (pName == String("chrgProfile")) {
             if (pVal == "std"){
                 requestProfile( 0 );
             } else if (pVal == "qck"){
                 requestProfile( 1 );
-                g_semp->setEmState( EM_ON );
+                g_pow->setPwr(true);
             } else if (pVal == "del"){
                 g_semp->resetPlan(-1); // reset active Plan
-                g_semp->setEmState(  EM_OFF  );
                 g_pow->setPwr(false);
             } else if (pVal == "delAll"){
                 g_semp->deleteAllPlans();
-                g_semp->setEmState( EM_OFF );
                 g_pow->setPwr(false);
             } else {
                 requestProfile( atoi(pVal.c_str())  );
-
             }
         } else if (pName == String("stat")) {
         } else {
@@ -182,6 +187,7 @@ void handleCtl() {
         }
     }
     handleStat();
+    pushStat();
 }
 
 #define value2timeStr( vs )   (snprintf_P( (vs##_s), sizeof(vs##_s), PSTR("%2lu:%02lu"), (((vs)  % 86400L) / 3600), (((vs)  % 3600) / 60) ), (vs##_s))
@@ -338,24 +344,36 @@ void requestProfile(unsigned i_profile)
 }
 
 void mkStat( String& resp) {
+    PlanningData* activePlan = g_semp->getActivePlan(); 
     StaticJsonDocument<512> stat;
     // Set the values in the document
-    stat["voltage"] = g_pow->voltage;
-    stat["pwr"] =  g_pow->activePwr;
+    stat["voltage"]     = g_pow->voltage;
+    stat["pwr"]         = g_pow->activePwr;
+    stat["current"]     = g_pow->current;
+    stat["switchState"] = g_pow->relayState ? "ON" : (activePlan ? "pending" :"OFF") ;
+    stat["ledState"]    = g_pow->ledState ? "ON" : "OFF";
+    stat["avrPwr"]      = g_pow->averagePwr;
+    stat["appPwr"]      = g_pow->apparentPwr;
+    stat["pwrFactor"]   = g_pow->pwrFactor;
 
-    stat["current"] =    g_pow->current;
-    unsigned  req_chg= g_semp->getActivePlan() ? g_semp->getActivePlan()->m_requestedEnergy : 0;
-    stat["rchg"] =    req_chg;
-    stat["switchState"] =  g_pow->relayState ? "ON" :"OFF" ;
+    
+    stat["online"]      =  g_pow->online ? "online" : "offline";
+    unsigned  req_chg = 0;
+    long let =  0;
+    if ( activePlan ) {
+      if (activePlan->is_timebased() ){
+        req_chg =  activePlan->m_minOnTime;
+        stat["reqUnit"]   =" s";
+      } else {
+        req_chg = activePlan->m_requestedEnergy;
+        stat["reqUnit"]   =" Wh";
+      }
 
-    long let = g_semp->getActivePlan() ? g_semp->getActivePlan()->m_latestEnd : 0;
+      let =  activePlan->m_latestEnd;
+    }
+    stat["rchg"]  = req_chg;
     stat["latestEnd"] = g_Clk.getTimeStringS( let );
-    // Serialize JSON
-    stat["ledState"]  = !g_pow->ledState;
-    stat["avrPwr"]    = g_pow->averagePwr;
-    stat["appPwr"]    = g_pow->apparentPwr;
-    stat["pwrFactor"] = g_pow->pwrFactor;
-
+   
     if (serializeJson(stat, resp) == 0) {
         DEBUG_PRINT(PSTR("Failed to serialize"));
     }

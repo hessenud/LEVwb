@@ -115,10 +115,11 @@ WebServer_T http_server(80);
 WebServer_T semp_server(SEMP_PORT);
 WebSocketsServer socket_server(81);
 
-uSEMP* g_semp;
+uSEMP*  g_semp;
 PowMqtt g_mqtt;
-
-
+bool    g_gsi;      // true - control by GSI
+bool    g_lastRelay;
+static unsigned long ltime=0;
 
 
 #ifdef WITH_OLED
@@ -140,6 +141,21 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 
 
+const char* state2txt( int state)
+{
+    return state== HIGH ? "HIGH" : "LOW";
+}
+
+
+void pushStat()
+{
+    // socket_server.send
+    String st;
+    mkStat( st );
+    DEBUG_PRINT("STATUS: msg len:%u\n---------------------------\n%s\n--------------------------\n", st.length(), st.c_str());
+    socket_server.broadcastTXT(st.c_str(), st.length());
+}
+
 
 
 void setup() {
@@ -150,7 +166,9 @@ void setup() {
     DEBUG_PRINT("Initializing filesystem...\n");
     fileSystemConfig.setAutoFormat(false);
     fileSystem->setConfig(fileSystemConfig);
-
+    
+    //g_pow->online = 
+    g_gsi = false;
     fsOK = fileSystem->begin();
     DEBUG_PRINT(fsOK ? ("Filesystem initialized.\n") : ("Filesystem init failed!\n"));
 
@@ -168,10 +186,10 @@ void setup() {
     g_semp = new uSEMP( udn_uuid, DeviceID, g_prefs.device_name, DeviceSerial, uSEMP::devTypeStr(g_prefs.devType), Vendor, g_prefs.maxPwr, &semp_server, SEMP_PORT );
     g_pow = newPOW( g_prefs.modelVariant, g_semp );
     g_semp->setCallbacks( getTime
-            ,([]( EM_state_t ems) {  g_pow->setEmState(ems);  })
+            ,([]( EM_state_t ems) {  g_pow->rxEmState(ems);  })
             ,([]( ) {  g_pow->endOfPlan();  }));
 
-     g_semp->setEmState( EM_OFF );
+    
     ///////////////////////////////
     // 
 
@@ -192,17 +210,8 @@ void setup() {
     setupOTA();
 
     // requestDailyPlan(false);
-
+    pushStat();
 }
-
-
-static unsigned long ltime=0;
-
-const char* state2txt( int state)
-{
-    return state== HIGH ? "HIGH" : "LOW";
-}
-
 
 
 
@@ -234,17 +243,15 @@ void loop()
     int day_of_week = ( (_now/(1 Day)) + 3) % 7; 
     wp += sprintf_P(wp, PSTR("* %s %s *"), days[day_of_week],TimeClk::getTimeString( _now ) );
     draw( buffer );  
-    if ( _now - ltime > 5  ) {
-        if (g_pow)  DEBUG_PRINT("LED: %s  Relay: %s\n", state2txt(!g_pow->ledState), state2txt( !g_pow->relayState) );
-        DEBUG_PRINT("OLED:\n%s\n", buffer );
-
-        ltime = _now;
-
-        // socket_server.send
-        String st;
-        mkStat( st );
-        DEBUG_PRINT("STATUS: msg len:%u\n---------------------------\n%s\n--------------------------\n", st.length(), st.c_str());
-        socket_server.broadcastTXT(st.c_str(), st.length());
+    if ( ( _now - ltime > 5  ) 
+       || ( g_lastRelay != g_pow->relayState   )
+       ) {
+      ltime = _now;
+      g_lastRelay = g_pow->relayState;
+      pushStat();
+      if (g_pow)  DEBUG_PRINT("LED: %s  Relay: %s EMstate: %s\n", state2txt(g_pow->ledState ), state2txt( g_pow->relayState), g_pow->online ? "ONLINE" : "OFFLINE"  );
+    
+      DEBUG_PRINT("OLED:\n%s\n", buffer );
     }
 
     if (g_pow) g_pow->loop();

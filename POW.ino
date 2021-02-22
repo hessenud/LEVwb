@@ -25,7 +25,7 @@ POW*  newPOW( unsigned i_variant, uSEMP* i_semp )
 POW::POW( uSEMP* i_semp)
 :m_sense(0), m_semp(i_semp), m_activePwr(0), m_voltage(0), m_current(0)
 , m_apparentPwr(0), m_averagePwr(0), m_pwrFactor(0), m_cumulatedEnergy(0),_cumulatedEnergy(0)
-, m_activeProfile(0), m_ad_state(AD_OFF), m_em_online(true)
+, m_activeProfile(0), m_ad_state(AD_OFF), online(true)
 {
     m_last_update=millis();
 }  
@@ -39,24 +39,20 @@ void POW::setup() {
     // Open the relay to switch on the load
     m_relayState = RELAY_OFF;
     m_semp->setEmState( EM_OFF );
-
+    m_semp->acceptEMSignal( online );
+    
     m_pwrIdx = 0;
-    m_averagePwr = 0;
-    m_minPwrIdx=m_maxPwrIdx = 0;
+    m_averagePwr = m_minPwr=m_maxPwr = 0;
 
-
-    {
-        m_ledState   = LED_OFF;
-        m_relayState = RELAY_OFF;
-        pinMode(m_ledPin, OUTPUT);
-        pinMode(m_relayPin, OUTPUT);
-        pinMode(m_buttonPin, INPUT);
-
-        digitalWrite(m_relayPin, m_relayLogic^relayState );
-        digitalWrite(m_ledPin,   m_relayLogic^ledState );
-    }
-
-
+    m_ledState   = LED_OFF;
+    m_relayState = RELAY_OFF;
+    pinMode(m_ledPin, OUTPUT);
+    pinMode(m_relayPin, OUTPUT);
+    pinMode(m_buttonPin, INPUT);
+    
+    digitalWrite(m_relayPin, m_relayLogic^relayState );
+    digitalWrite(m_ledPin,   m_relayLogic^ledState );
+    
 
     for(unsigned  n=0; n<DIM(m_powers); ++n)
     { 
@@ -66,7 +62,9 @@ void POW::setup() {
     m_sumPwr = 0;
 
 
-    m_application = [this](){  DEBUG_PRINT(" app Delegate"); };
+    m_application = [this](){  
+      //DEBUG_PRINT(" app Delegate");
+      };
 
 }
 
@@ -248,6 +246,8 @@ void POW::handleEnergyReq()
     }
     DEBUG_PRINT("POW requested Energy on plan %d\n", planHandle);
 
+    // override AD state to suppress unintended overwrite
+    m_ad_state = AD_ON;
 
     String resp = String("[HLW] Active Power (W)    : ") + String(activePwr) +
             String("\n[HLW] Voltage (V)         : ") + String(voltage) +
@@ -450,8 +450,7 @@ void POW::procAdRequest()
     if ( idx >=0 ) {
         DEBUG_PRINT(" matching timeframe: %d\n", idx);
         m_semp->deleteAllPlans(); 
-        g_pow->setPwr( false );
-        m_semp->setEmState( EM_OFF );
+        setPwr( false );
         g_LED.set( 0x5f, 8, true);
         PowProfile& prf = g_prefs.powProfile[idx];
         unsigned long _now = getTime();
@@ -530,7 +529,8 @@ ad_event_t POW::autoDetect() {
     return ret;
 }
 
-void POW::loop() {
+void POW::loop() 
+{
     m_sense->loop();  // Polled sensors need some cpu
     unsigned long now=millis();
     // This UPDATE_TIME should be at least twice the minimum time for the current or voltage
@@ -547,30 +547,39 @@ void POW::loop() {
         if (activePlan){
             requestedEnergy = activePlan->m_requestedEnergy;
             optionalEnergy  = activePlan->m_optionalEnergy;
+        } else {
+          if ( m_ad_state == AD_ON )  m_ad_state = AD_OFF;
         }
 
         if ( m_sense ) {
             m_activePwr = relayState ? m_sense->getActivePower(): 0;
             m_voltage   = m_sense->getVoltage();
             m_current   = relayState ? m_sense->getCurrent(): 0;
-            m_apparentPwr = relayState ? m_sense->getApparentPower():0;
-
-            // manipulate sum directly
-            m_sumPwr -= m_powers[m_pwrIdx];
-            m_sumPwr += activePwr;
-            // maintain mix/maxIdx to avoid searching the array
-            if ( m_powers[m_pwrIdx] <= m_powers[m_minPwrIdx] ) m_minPwrIdx = m_pwrIdx;
-            if ( m_powers[m_pwrIdx] >= m_powers[m_maxPwrIdx] ) m_maxPwrIdx = m_pwrIdx;
+            m_apparentPwr = relayState ? m_sense->getApparentPower():0;  
+       
             m_powers[m_pwrIdx] = activePwr;
-            m_averagePwr = m_sumPwr/DIM(m_powers);
-
+      
             if ( ++m_pwrIdx >= DIM(m_powers) ) {
-                m_pwrIdx = 0;;
+                m_pwrIdx = 0;
                 //DEBUG_PRINT("idx: %u/%u --average POWER: %u\n", pwrIdx, DIM_PWRS, averagePwr );
             } else {
                 //DEBUG_PRINT("summing actualPower: %u\n", activePwr );
             }
-
+            {
+                unsigned minPwr = unsigned(-1);
+                unsigned maxPwr = 0;
+                unsigned sumPwr = 0;
+                for ( unsigned i=0; i< DIM(m_powers); ++i ) {
+                  unsigned pwr = m_powers[i];
+                  sumPwr += pwr;
+                  if ( pwr > maxPwr) maxPwr = pwr;
+                  if ( pwr < minPwr) minPwr = pwr;
+                }
+                
+                m_averagePwr = sumPwr/DIM(m_powers);
+                m_minPwr = minPwr;
+                m_maxPwr = maxPwr;
+            }
             m_pwrFactor = (int) (100 *  m_sense->getPowerFactor());
 
 #ifdef USE_POW_DBG
@@ -596,13 +605,12 @@ void POW::loop() {
         } else if ( autoDetectState  == AD_END_REQUEST ) {
             DEBUG_PRINT(" Autodetected  End of Energy Request\n");
             m_semp->resetPlan(); 
-            g_pow->setPwr( false );
-            m_semp->setEmState( EM_OFF  ); // ONLINE but OFF
+            setPwr( false );
             g_LED.reset();
         } else {
             // prolong active Plan if job not completed
             if ( activePlan && (activePlan->end() - _time < g_prefs.ad_prolong_inc) ) 
-              activePlan->updateEnergy(  _time, m_semp->getEmState(), 0, 0,  g_prefs.ad_prolong_inc);
+              activePlan->updateEnergy(  _time, relayState, 0, 0,  g_prefs.ad_prolong_inc);
         }
 
         if ( m_application )   m_application();
@@ -629,8 +637,8 @@ void POW::loop() {
         }
         /////////////////////////////////
 
-        m_semp->updateTime( _time );
-        m_semp->setPwr( averagePwr, m_powers[m_minPwrIdx], m_powers[m_maxPwrIdx]);
+        m_semp->updateTime( _time, m_relayLogic^relayState );
+        m_semp->setPwr( averagePwr, m_minPwr, m_maxPwr);
         _DEBUG_PRINT("POW update end\n");
     }
 }
@@ -639,19 +647,21 @@ void POW::loop() {
 
 void POW::setPwr(bool i_state )
 {
-    if (relayState != i_state ) {
-      digitalWrite(m_relayPin, m_relayLogic^(m_relayState = i_state) );
+    if ( relayState != i_state ) {
+      digitalWrite( relayPin, m_relayLogic^(m_relayState = i_state) );
+      m_semp->setEmState( relayState ? EM_ON : EM_OFF );
     }
 }
+
 
 /**
  * EM signals to pow the state of SEMP device
  * OFFLINE = no control by EM
  * 
  */
-void POW::setEmState(EM_state_t i_em_state, unsigned /*i_recommendedPwr*/ )
+void POW::rxEmState(EM_state_t i_em_state, unsigned /*i_recommendedPwr*/ )
 {
-  if ( m_em_online && (i_em_state != EM_OFFLINE) ) {
+  if ( online && (i_em_state != EM_OFFLINE) ) {
        setPwr( i_em_state == EM_ON ); 
   }
 }
@@ -659,16 +669,20 @@ void POW::setEmState(EM_state_t i_em_state, unsigned /*i_recommendedPwr*/ )
 void  POW::endOfPlan(  )
 {
     g_LED.reset();
+    resetAutoDetectionState();
 }
 
 void POW::setLED(bool i_state )
 {
     if (ledState != i_state ) digitalWrite(m_ledPin, m_ledLogic ^(m_ledState = i_state) );
 }
+
 void POW::toggleRelay()
 {
     setPwr( !relayState );
+   
 }
+
 void POW::toggleLED()
 {
     setLED( !ledState );
@@ -703,6 +717,7 @@ void POW::dump()
 HLW8012* g_HLW;
 void ICACHE_RAM_ATTR hlw_cf1_interrupt(){ if(g_HLW) g_HLW->cf1_interrupt(); }
 void ICACHE_RAM_ATTR hlw_cf_interrupt(){ if(g_HLW) g_HLW->cf_interrupt();  }
+
 void POW_R1::setInterrupts() {
     g_HLW = static_cast<PwrSensHLW8012*>(m_sense)->getHLW8012();
     attachInterrupt(HLW8012_CF1_PIN, hlw_cf1_interrupt, CHANGE   );

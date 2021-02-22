@@ -3,30 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css">
 
-<script>
-
-function goMain(p) {
-	window.location.href = "main.html";
-}
-
-function doRequest(url, upd) {
-	//var pref = "http://192.168.178.35/"; url = pref + url;
-	// alert(" doRequest: " +url );
-	fetch(url, {mode: 'no-cors'} )
-	  .then(function(response) {
-		  return response.json();
-	  })
-	  .then(function(resp){
-		  if (upd) upd(resp);  //updateProfiles(resp);
-	  })
-	  .catch(function(error) {
-	    console.log('Request failed', error);
-	    alert('Request failed:' + error);
-	  });
-}
-</script>
 <title>LEVwb Charge</title>
 </head>
 <body onload="javascript:init()">
@@ -98,6 +76,26 @@ function doRequest(url, upd) {
 	</div>
 </body>
 <script>
+
+	function goMain(p) {
+		window.location.href = "main.html";
+	}
+	
+	function doRequest(url, upd) {
+		//var pref = "http://192.168.178.35/"; url = pref + url;
+		fetch(url, {mode: 'no-cors'} )
+		  .then(function(response) {
+			  return response.json();
+		  })
+		  .then(function(resp){
+			  if (upd) upd(resp);  //updateProfiles(resp);
+		  })
+		  .catch(function(error) {
+		    console.log('Request failed', error);
+		    alert('Request failed:' + error);
+		  });
+	}
+	
 	function reqCharge(req, opt, est, let, tod) {
 		var rq = "energy?plan=0&"
          	+ "requested=" + req
@@ -111,7 +109,6 @@ function doRequest(url, upd) {
  	}
 	
  	function commitProf( pid, req, opt, est, let , tod){
- 		//if (!tod) alert("reativePlan");
  		var rq = "setProfile?profile=" + pid
         		+ "&requested="  + req
           		+ "&optional=" + opt
@@ -138,7 +135,6 @@ function doRequest(url, upd) {
  	
 
 	function updateProfiles(obj) {
-		alert(  JSON.stringify(obj) );
 		var nPrf = 6;
 		for (var n=0; n< nPrf; ++n){
 			console.log(" Profile " + n + "--\n");

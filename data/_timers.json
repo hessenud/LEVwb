@@ -14,6 +14,34 @@
       "repeat": false,
       "armed": false,
       "switchmode": true
+    },    {
+      "sw_time": 0,
+      "interval": 0,
+      "mo": false,
+      "tu": false,
+      "we": false,
+      "th": false,
+      "fr": false,
+      "sa": false,
+      "su": false,
+      "everyday": false,
+      "repeat": false,
+      "armed": false,
+      "switchmode": true
+    },    {
+      "sw_time": 0,
+      "interval": 0,
+      "mo": false,
+      "tu": false,
+      "we": false,
+      "th": false,
+      "fr": false,
+      "sa": false,
+      "su": false,
+      "everyday": false,
+      "repeat": false,
+      "armed": false,
+      "switchmode": true
     },
     {
       "sw_time": 0,

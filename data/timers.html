@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <link rel="stylesheet" href="style.css">
+
+
+<title>LEVwb Timers</title>
+</head>
+<body onload="javascript:init()">
+	<span class="title">LEVwb Timers </span>
+	<div class="directCtl">
+		<a href="main.html"><button>MainCtrl</button></a>
+	</div>
+
+	<hr>TimeFrame1: <input type="checkbox" id="on1"> on  <input type="checkbox" id="armTm1"> armed<input type="checkbox" id="repTm1">repeat<br>	
+	<div class="col2" id="timer1">
+	    <label>Time:<input type="time"	  id="time1">	</label><br>
+	</div>
+	<hr>TimeFrame2 <input type="checkbox" id="on3"> on <input type="checkbox" id="armTm2"> armed<input type="checkbox" id="repTm2">repeat<br>
+	<div class="col2" id="timer2">
+		<label>Time:<input type="time"	  id="time2">	</label><br>
+	</div>
+	<hr>TimeFrame3:   <input type="checkbox" id="on3"> on <input type="checkbox" id="armTm3"> armed<input type="checkbox" id="repTm3">repeat<br>
+	<div class="col2" id="timer3">
+		<label>Time:<input type="time"	  id="time3">	</label><br>
+	</div>	
+    <hr>TimeFrame4:   <input type="checkbox" id="on4"> on <input type="checkbox" id="armTm4"> armed<input type="checkbox" id="repTm3">repeat<br>
+	<div class="col2" id="timer4">
+		 <label>Time:<input type="time"	  id="time4">	</label><br>
+	</div>	
+	<div class="directCtl"> <button type="button" onclick="commitCfg()">Save</button></div>
+	<hr>
+	
+</body>
+<script>
+	function updateValues(obj) {
+	  console.log("Update: ", obj );
+	}
+
+	function commitCfg() {
+		let url =  "";
+		fetch(url)
+		.then(res => console.log("RESP: ", res))
+		.catch(err => { throw err });
+	}
+
+	function init() {
+		let url = 'config.json';
+		
+		fetch(url)
+		.then(res => res.json())
+		.then((out) => {
+		  console.log('Checkout this JSON! ', out);
+		  updateValues(out);
+		})
+		.catch(err => { throw err });
+		
+	}
+</script>
+</html>

@@ -6,21 +6,6 @@
  <link rel="stylesheet" href="style.css">
 
 
-<script>
-function doRequest(url, upd) {
-	//var pref = "http://192.168.178.35/"; url = pref + url;
-	fetch(url, {mode: 'no-cors'} )
-	  .then(function(response) {
-		  return response.json();
-	  })
-	  .then(function(resp){
-		  if (upd) upd(resp);  //updateProfiles(resp);
-	  })
-	  .catch(function(error) {
-	    console.log('Request failed', error)
-	  });
-}
-</script>
 <title>LEVwb Control</title>
 </head>
 <body onload="javascript:init()">
@@ -29,28 +14,33 @@ function doRequest(url, upd) {
 	<div class="directCtl">
 		<button id="On" onclick="switchCtl(1)">ON</button>
 		<button id="Off" onclick="switchCtl(0)">OFF</button>
-		<span id="switchState">__</span> <a href="chg.html"><button>ProgChg</button></a>
+		<span>
+		<button id="switchState" class = "led-red"> </button> 	
+	  <button id="Online" onclick="togOnline()">On/Offline</button>
+		<button id="onlineState" class = "led-grey"> </button> </span> 
+		
+		
 	</div>
 
 	<div class="col3">
-		<label for="voltage">Voltage:</label> <br> <label for="PWR">Charging:</label>
-		<br> <label for="rqCharge">req. Charge:</label> <br> <label>
+		<label for="voltage">Voltage:</label> <br> <label for="PWR">Power:</label>
+		<br> <label for="rqCharge">req. Energy:</label> <br> <label>
 			FinishBy: </label> <br>
 
 		<meter id="voltage" value="0" min="200" low="220" optimum="230"
 			high="240" max="250"> </meter>
 		<br>
 		<meter id="PWR" value="0" min="0" low="300" optimum="2000" high="2300"
-			max="2350"> </meter>
+			max="3000"> </meter>
 		<br>
 		<meter id="rqCharge" value="0" min="0" optimum="3000" high="6000"
 			max="7000"> </meter>
 		<br> <span id="latestEnd">__:__</span><br>
-		<output id="outputV" for="voltage">232 V</output>
+		<output id="outputV" for="voltage">0 V</output>
 		<br>
-		<output id="outputP" for="PWR">1982 W</output>
+		<output id="outputP" for="PWR">0 W</output>
 		<br>
-		<output id="outputC" for="rqCharge">3100 Wh</output>
+		<output id="outputC" for="rqCharge">0 Wh</output>
 		<br>
 	</div>
 
@@ -61,12 +51,30 @@ function doRequest(url, upd) {
 		<button id="AbortCharge" onclick="chargeProfile('del')">Cancel</button>
 	</div>
 	<a href="cfg.html"><button>Configure...</button></a>
-
+	<a href="chg.html"><button>ProgChg</button></a>
+		
 </body>
 <script>
+	function doRequest(url, upd) {
+		// var pref = "http://192.168.178.35/"; url = pref + url;
+		fetch(url, {mode: 'no-cors'} )
+		  .then(function(response) {
+			  return response.json();
+		  })
+		  .then(function(resp){
+			  if (upd) upd(resp);  //updateProfiles(resp);
+		  })
+		  .catch(function(error) {
+		    console.log('Request failed', error)
+		  });
+	}
+  function togOnline() {
+    var url = "ctl?togOnline";
+    doRequest(url, updateValues);
+  }
   function switchCtl(s) {
     var url = "ctl?" + ((s == 1) ? "on" : "off");
-    doRequest(url);
+    doRequest(url, updateValues);
   }
   function getUpdate() {
     doRequest("stat", updateValues );
@@ -90,11 +98,23 @@ function doRequest(url, upd) {
     document.getElementById("voltage").value = obj.voltage;
     document.getElementById("PWR").value = obj.pwr;
     document.getElementById("rqCharge").value = obj.rchg;
+    // document.getElementById("reqUnit").value = obj.reqUnit;
+	
     document.getElementById("outputV").value = obj.voltage + " V";
     document.getElementById("outputP").value = obj.pwr + " W";
-    document.getElementById("outputC").value = obj.rchg + " Wh";
+    document.getElementById("outputC").value = obj.rchg + obj.reqUnit;
+    var onl =  obj.online;
+    var onOff =  obj.switchState;
 
-    document.getElementById("switchState").innerHTML = obj.switchState;
+	if (onl == "offline" ) {
+		document.getElementById("Online").innerHTML = "online";
+    	document.getElementById("onlineState").className = "led-grey";
+    } else {
+    	document.getElementById("Online").innerHTML = "offline";	
+    	document.getElementById("onlineState").className="led-blue";
+    }
+	document.getElementById("switchState").className = ((onOff=="ON")? "led-green": ((onOff=="OFF") ? "led-red" : "led-yellow" ) );
+	
     document.getElementById("latestEnd").innerHTML = obj.latestEnd;
   }
 
