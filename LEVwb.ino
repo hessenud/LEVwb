@@ -167,7 +167,6 @@ void setup() {
     fileSystemConfig.setAutoFormat(false);
     fileSystem->setConfig(fileSystemConfig);
     
-    //g_pow->online = 
     g_gsi = false;
     fsOK = fileSystem->begin();
     DEBUG_PRINT(fsOK ? ("Filesystem initialized.\n") : ("Filesystem init failed!\n"));
@@ -288,4 +287,19 @@ void loopDebug()
 #ifdef DEBUG_SUPPORT
     Debug.handle(); // Remote debug over telnet
 #endif
+}
+
+
+
+
+POW*  newPOW( unsigned i_variant, uSEMP* i_semp )
+{
+    switch ( i_variant ) {
+    case 0:   return new POW_Sim( i_semp, handleAppEvt );             break;
+    case 1:   return new POW_R1(  i_semp, handleAppEvt );             break; 
+    case 2:   return new POW_R2(  i_semp, handleAppEvt );             break;
+    case 3:   return new POW_R3(  i_semp, handleAppEvt );             break;
+    default:  return new POW_Sim( i_semp, handleAppEvt );             break;
+    }
+
 }

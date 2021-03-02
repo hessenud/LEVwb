@@ -9,7 +9,7 @@
 <title>LEVwb Control</title>
 </head>
 <body onload="javascript:init()">
-	<span class="title">LEVwb Control</span>
+	<span class="title"><label id="device_name">LEVwb</label> Control</span>
 	<br>
 	<div class="directCtl">
 		<button id="On" onclick="switchCtl(1)">ON</button>
@@ -95,9 +95,10 @@
   }
 
   function updateValues(obj) {
-    document.getElementById("voltage").value = obj.voltage;
+  	document.getElementById("device_name").innerHTML = obj.device_name;
+  	document.getElementById("voltage").value = obj.voltage;
     document.getElementById("PWR").value = obj.pwr;
-    document.getElementById("rqCharge").value = obj.rchg;
+    document.getElementById("rqCharge").value = (obj.rchg == "NaN") ? 0 : obj.rchg;
     // document.getElementById("reqUnit").value = obj.reqUnit;
 	
     document.getElementById("outputV").value = obj.voltage + " V";

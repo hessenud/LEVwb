@@ -4,26 +4,113 @@
 #include "uSEMP.h"
 #include "HLW8012.h"
 #include "CSE7766.h"
+//#include "BL0937.h"
 
+/*****************
+ *  simulation Devboard
+ */
+#define BUTTON_PIN_R0     0
+#define LED_PIN_R0        LED_BUILTIN
+#define RELAY_PIN_R0      12
 
-#define RELAY_PIN         12
+/******************
+ * Sonoff POW Rev 1
+ * HLW8012
+ * GPIO # Component
+GPIO00  Button1
+GPIO01  None
+GPIO02  None
+GPIO03  None
+GPIO04  None
+GPIO05  HLWBL SEL
+GPIO09  None
+GPIO10  None
+GPIO12  Relay1
+GPIO13  HLWBL CF1
+GPIO14  HLW8012 CF
+GPIO15  Led1
+GPIO16  None
+FLAG  None
 
+ */
+#define BUTTON_PIN_R1     0
 #define LED_PIN_R1        15
+#define RELAY_PIN_R1      12
+#define HLW8012_SEL_PIN     5
+#define HLW8012_CF1_PIN     13
+#define HLW8012_CF_PIN      14
+
+
+/***********************
+ * Sonoff POW Rev2 
+ * CSE7766
+GPIO # Component
+GPIO00  Button1
+GPIO01  CSE7766 Tx
+GPIO02  None
+GPIO03  CSE7766 Rx
+GPIO04  None
+GPIO05  None
+GPIO09  None
+GPIO10  None
+GPIO12  Relay1
+GPIO13  Led1i
+GPIO14  None
+GPIO15  None
+GPIO16  None
+FLAG  None
+
+ */
+ 
+#define CSE7766_PIN             1
+// Needs CSE7766 Energy sensor, via Serial RXD 4800 baud 8E1 (GPIO1), TXD (GPIO3)
+
+#define BUTTON_PIN_R2     0
 #define LED_PIN_R2        13
+#define RELAY_PIN_R2      12
+
+/*****************
+ * 
+
+#define HLW8012_VOLTAGE_R_UP            ( 2 * 1000000 )  // Upstream voltage resistor
+
+Manufacturer: 
+Gosund.com 
+
+
+GPIO # Component
+GPIO00  None
+GPIO01  Led1i
+GPIO02  None
+GPIO03  Button1
+GPIO04  BL0937 CF
+GPIO05  HLWBL CF1
+GPIO09  None
+GPIO10  None
+GPIO12  HLWBL SELi
+GPIO13  Led2i
+GPIO14  Relay1
+GPIO15  None
+GPIO16  None
+FLAG  None
+
+ */
+
+#define BUTTON_PIN_R3     13
+#define LED_PIN_R3        0
+#define RELAY_PIN_R3      15
+#define HLW8012_SEL_PIN_R3     3 // 12
+#define HLW8012_CF1_PIN_R3     14
+#define HLW8012_CF_PIN_R3      5
+
 #define LED_PIN_DEVBOARD  2
 
 
 // Check values every 2 seconds
 #define UPDATE_TIME                     3000
 
-#define HLW8012_SEL_PIN     5
-#define HLW8012_CF1_PIN     13
-#define HLW8012_CF_PIN      14
 
-// CSE7766 -- POW Rev2 
-///@todo REV2 uses CSE7766
-#define CSE7766_PIN             1
-// Needs CSE7766 Energy sensor, via Serial RXD 4800 baud 8E1 (GPIO1), TXD (GPIO3)
+
 
 
 // Set SEL_PIN to HIGH to sample current
@@ -36,6 +123,8 @@
 #define CURRENT_RESISTOR                0.001
 #define VOLTAGE_RESISTOR_UPSTREAM       ( 5 * 470000 ) // Real: 2280k
 #define VOLTAGE_RESISTOR_DOWNSTREAM     ( 1000 ) // Real 1.009k
+
+#define VOLTAGE_RESISTOR_UPSTREAM_R3    ( 2 * 1000000 )  // Upstream voltage resistor SP1
 
 #define RELAY_ON    true
 #define RELAY_OFF   false
@@ -96,8 +185,11 @@ struct PowProfile {
         clear();
     }
 
-    PowProfile(   bool     i_tf, bool     i_tod,bool   i_armed, bool i_repeat,  unsigned i_est, unsigned i_let, unsigned i_req, unsigned i_opt )
-    :timeframe(i_tf), timeOfDay(i_tod), armed(i_armed), repeat(i_repeat), est(i_est), let(i_let), req(i_req), opt(i_opt)
+    /**
+     * create a valid Profile
+     */
+    PowProfile( bool i_tf, bool i_tod, bool i_armed, bool i_repeat,  unsigned i_est, unsigned i_let, unsigned i_req, unsigned i_opt )
+        :valid(true), timeframe(i_tf), timeOfDay(i_tod), armed(i_armed), repeat(i_repeat), est(i_est), let(i_let), req(i_req), opt(i_opt)
     {
         *est_s=0;
         *let_s=0;
@@ -289,6 +381,17 @@ typedef enum  {
     AD_END_REQUEST = -1
 } ad_event_t;
 
+typedef enum     {
+  APP_IDLE,
+  APP_ON,     // Power goes off
+  APP_OFF,    // Power goes ON
+  APP_REQ,    // new Request scheduled
+  APP_EOR,    // end of active request
+  //-------------
+  APP_N_EVTS
+} AppEvt_t;
+
+typedef std::function<void(AppEvt_t evt, void* par)> AppCb_t;
 
 class POW {
 protected:
@@ -339,7 +442,7 @@ protected:
      * @param  i_req  -- the energy amount/minOnTime of the request 
      * @return the profile containing a matching timeframe
      */
-    int findTimeFrame( bool i_nrgy,unsigned i_req  );
+    PowProfile findTimeFrame( bool i_nrgy,unsigned i_req  );
 
     /**
      * prolong an active PlanningRequest if a device needs more energy to complete the running job.
@@ -372,7 +475,7 @@ public:
     
 public:
     
-    uDelegate  m_application;
+    AppCb_t m_applicationCB;
 
     attr_reader( int, ledState );
     attr_reader( int, relayState );
@@ -395,7 +498,7 @@ public:
     double   currentMultiplier(){ return m_sense ? m_sense->getCurrentMultiplier(): 1;};
     double   voltageMultiplier(){ return m_sense ? m_sense->getVoltageMultiplier(): 1;};
 
-    POW( uSEMP* i_semp );
+    POW( uSEMP* i_semp, AppCb_t i_appCb );
     void setup();
 
     unsigned calcOnTime( unsigned requestedEnergy, unsigned avr_pwr);
@@ -443,32 +546,36 @@ public:
     void dump();
 };
 
-class POW_R1: public POW {
-    void setInterrupts();
-
-public:
-    POW_R1( uSEMP* i_semp);
-};
-
 
 class POW_0: public POW {
 public:
-    POW_0( uSEMP* i_semp);
+    POW_0( uSEMP* i_semp, AppCb_t i_appCb );
+};
+
+
+class POW_R1: public POW {
+    void setInterrupts();
+public:
+    POW_R1( uSEMP* i_semp, AppCb_t i_appCb);
 };
 
 
 class POW_R2: public POW {
 public:
-    POW_R2( uSEMP* i_semp);
+    POW_R2( uSEMP* i_semp, AppCb_t i_appCb );
+};
+
+class POW_R3: public POW {
+      void setInterrupts();
+public:
+    POW_R3( uSEMP* i_semp, AppCb_t i_appCb );
 };
 
 
 class POW_Sim: public POW {
 public:
-    POW_Sim( uSEMP* i_semp);
+    POW_Sim( uSEMP* i_semp, AppCb_t i_appCb );
 };
 
-
-POW*  newPOW( unsigned i_variant, uSEMP* i_semp );
 
 #endif

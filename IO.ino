@@ -8,6 +8,34 @@ BlinkSignal    g_LED(LED_TICKLEN);
 MorseCoder     g_Morse(LED_TICKLEN*2);
 
 
+void handleAppEvt( AppEvt_t i_evt, void* i_par)
+{
+  switch(i_evt)
+  {
+    case APP_EOR:
+        //End of request or plan 
+        DEBUG_PRINT("handleAppEvt:  END OF REQUEST %d par:%p\n", i_evt, i_par);
+        g_LED.reset();
+        g_pow->online= true; // default is: resume control by EM if active request ends
+        break;
+    case APP_REQ: // new request active
+        g_LED.set( 0x5f, 8, true);
+         g_pow->online= true; // default is: resume control by EM if a new request is planned
+       
+        DEBUG_PRINT("handleAppEvt: NEW REQUEST gone ACTIVE%d par:%p\n", i_evt, i_par);
+        break;
+    case APP_IDLE:
+         //Serial.printf("handleAppEvt: IDLE %d par:%p\n", i_evt, i_par);
+        break;
+    default:
+    //IDLE
+       DEBUG_PRINT("handleAppEvt: UNKNOWN %d par:%p\n", i_evt, i_par);
+
+    ;
+  }
+}
+
+
 /**
  * @todo  local control  activate some pre defined/configured patterns like
  *      - request a certain amount of energy
@@ -27,14 +55,12 @@ void buttonControl()
 {
     int keyEvt = key->getEvent();
     switch ( keyEvt ) {
-      case PushButton::UP:
-          DEBUG_PRINT("KEY UP RESET LEDpattern\n");
+      case PushButton::UP:;
           g_LED.reset();
           break;
       case PushButton::DN:
-          DEBUG_PRINT("KEY DN reset Morse\n");
           g_Morse.reset();
-          g_LED.set(5,4,true);
+          g_LED.set(1,2,true);
           break;
       case PushButton::CLICK:
           g_pow->toggleRelay();// relayState = !relayState;
@@ -49,34 +75,23 @@ void buttonControl()
           g_LED.reset();
           break;
       case PushButton::DN_LONG2:
-          g_Morse.set(".....  -----");
-          g_semp->deleteAllPlans( );
-          g_LED.reset();
-          {
-            unsigned long _now = getTime();
-  #ifdef DEV_BOARD
-            g_semp->modifyPlan(0, _now, 100, 300,  _now ,  _now+200 );     
-  #else
-            g_semp->modifyPlan(0, _now, 3000,  6000,  _now ,  _now+8000 );
-  #endif
-          }
-          
-          g_LED.reset();
+          g_Morse.set("factory default settings...");
+
           break;
      case PushButton::DBLCLICK: 
-          g_Morse.next("..  --", true );
+          g_Morse.next("..  --  ", true );
           g_LED.reset();
           g_pow->setPwr( true );
           DEBUG_PRINT(" DBLCLICK!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
           break;
      case PushButton::TRIPLECLICK:
-          g_Morse.next(".. ---", true );
+          g_Morse.next(".. ---  ", true );
           g_LED.reset();
-           g_pow->setPwr( false );
+          g_pow->setPwr( false );
           DEBUG_PRINT(" TRIPLECLICK!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
           break;
      case PushButton::QUADCLICK:
-          g_Morse.next(".. ----", true );
+          g_Morse.next(".. ----  ", true );
           g_LED.reset();
           DEBUG_PRINT(" QUADCLICK!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
           break;

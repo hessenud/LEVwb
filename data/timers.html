@@ -14,36 +14,86 @@
 		<a href="main.html"><button>MainCtrl</button></a>
 	</div>
 
+	<hr>TimeFrame0: <input type="checkbox" id="on0"> on  <input type="checkbox" id="armTm0"> armed<input type="checkbox" id="repTm0">repeat<br>	
+	<div class="col2" id="timer1">
+	    <label>Time:<input type="time"	  id="time0">	<input type="checkbox" id="daily0"> daily</label><br>
+	</div>	
 	<hr>TimeFrame1: <input type="checkbox" id="on1"> on  <input type="checkbox" id="armTm1"> armed<input type="checkbox" id="repTm1">repeat<br>	
 	<div class="col2" id="timer1">
-	    <label>Time:<input type="time"	  id="time1">	</label><br>
+	    <label>Time:<input type="time"	  id="time1">	<input type="checkbox" id="daily1"> daily</label><br>
 	</div>
-	<hr>TimeFrame2 <input type="checkbox" id="on3"> on <input type="checkbox" id="armTm2"> armed<input type="checkbox" id="repTm2">repeat<br>
+	<hr>TimeFrame2 <input type="checkbox" id="on2"> on <input type="checkbox" id="armTm2"> armed<input type="checkbox" id="repTm2">repeat<br>
 	<div class="col2" id="timer2">
-		<label>Time:<input type="time"	  id="time2">	</label><br>
+		<label>Time:<input type="time"	  id="time2">	<input type="checkbox" id="daily2"> daily</label><br>
 	</div>
 	<hr>TimeFrame3:   <input type="checkbox" id="on3"> on <input type="checkbox" id="armTm3"> armed<input type="checkbox" id="repTm3">repeat<br>
 	<div class="col2" id="timer3">
-		<label>Time:<input type="time"	  id="time3">	</label><br>
+		<label>Time:<input type="time"	  id="time3">	<input type="checkbox" id="daily3"> daily</label><br>
 	</div>	
-    <hr>TimeFrame4:   <input type="checkbox" id="on4"> on <input type="checkbox" id="armTm4"> armed<input type="checkbox" id="repTm3">repeat<br>
+    <hr>TimeFrame4:   <input type="checkbox" id="on4"> on <input type="checkbox" id="armTm4"> armed<input type="checkbox" id="repTm4">repeat<br>
 	<div class="col2" id="timer4">
-		 <label>Time:<input type="time"	  id="time4">	</label><br>
+		 <label>Time:<input type="time"	  id="time4">	<input type="checkbox" id="daily4"> daily</label><br>
 	</div>	
-	<div class="directCtl"> <button type="button" onclick="commitCfg()">Save</button></div>
+	<div class="directCtl"> <button type="button" onclick="commitTimers()">Save</button></div>
 	<hr>
 	
 </body>
 <script>
+	function goMain(p) {
+		window.location.href = "main.html";
+	}
+	
+	function doRequest(url, upd) {
+		//
+		var pref = "http://192.168.178.35/"; url = pref + url;
+		alert( "RQ:  \n" + url );
+		fetch(url, {mode: 'no-cors'} )
+		  .then(function(response) {
+			  return response.json();
+		  })
+		  .then(function(resp){
+			  if (upd) upd(resp); 
+		  })
+		  .catch(function(error) {
+		    console.log('Request failed', error);
+		    alert('Request failed:' + error);
+		  });
+	}
+	function commitTimer(n,sw_time, interval, armed, switchmode, everyday) {
+		var rq = "setTimer?timer=" + n
+    		+ "&sw_time="  + sw_time
+      		+ "&interval=" + interval
+     	 	+ "&armed=" + armed
+     		+ "&switchmode=" + switchmode
+     		+ "&everyday=" + everyday
+     		;
+      			
+		doRequest( rq ) ;  
+	}
 	function updateValues(obj) {
 	  console.log("Update: ", obj );
+		var nPrf = 5;
+		for (var n=0; n< nPrf; ++n){
+			console.log(" Profile " + n + "--\n");
+			document.getElementById("time"+n).value 	= obj[n].sw_time;
+			document.getElementById("interval"+n).value = (obj[n].interval != 0);
+			document.getElementById("armTm"+n).checked 	= obj[n].armed;
+			document.getElementById("on"+n).checked		= obj[n].switchmode;
+			document.getElementById("daily"+n).checked 	= obj[n].everyday;
+		}
 	}
 
-	function commitCfg() {
-		let url =  "";
-		fetch(url)
-		.then(res => console.log("RESP: ", res))
-		.catch(err => { throw err });
+	function commitTimers() {
+		var nPrf = 5;
+		for (var n=0; n< nPrf; ++n){
+			var sw_time = document.getElementById("time"+n).value;
+			var interval  = document.getElementById("repTm"+n).checked ? (24*3600): 0;
+			var armed   = document.getElementById("armTm"+n).checked;
+			var switchmode  = document.getElementById("on"+n).checked;
+			var everyday=document.getElementById("daily"+n).checked;
+			commitTimer(n,sw_time, interval, armed, switchmode, everyday );
+		
+		}
 	}
 
 	function init() {

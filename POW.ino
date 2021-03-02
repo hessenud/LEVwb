@@ -10,20 +10,8 @@ void unblockingDelay(unsigned long mseconds) {
 }
 
 
-
-POW*  newPOW( unsigned i_variant, uSEMP* i_semp )
-{
-    switch ( i_variant ) {
-    case 0:   return new POW_Sim( i_semp );             break;
-    case 1:   return new POW_R1( i_semp );              break; 
-    case 2:   return new POW_R2(  i_semp );             break;
-    default:  return new POW_Sim( i_semp );               break;
-    }
-
-}
-
-POW::POW( uSEMP* i_semp)
-:m_sense(0), m_semp(i_semp), m_activePwr(0), m_voltage(0), m_current(0)
+POW::POW( uSEMP* i_semp, AppCb_t i_appCb )
+:m_applicationCB(i_appCb),m_sense(0), m_semp(i_semp), m_activePwr(0), m_voltage(0), m_current(0)
 , m_apparentPwr(0), m_averagePwr(0), m_pwrFactor(0), m_cumulatedEnergy(0),_cumulatedEnergy(0)
 , m_activeProfile(0), m_ad_state(AD_OFF), online(true)
 {
@@ -60,11 +48,6 @@ void POW::setup() {
     }
 
     m_sumPwr = 0;
-
-
-    m_application = [this](){  
-      //DEBUG_PRINT(" app Delegate");
-      };
 
 }
 
@@ -344,19 +327,19 @@ void POW::handlePwrReq()
     else      replyOKWithMsg(resp);
 }
 
-int  POW::findTimeFrame( bool i_timf, unsigned i_req  )
+PowProfile  POW::findTimeFrame( bool i_timf, unsigned i_req  )
 {
-    unsigned ret = N_POW_PROFILES;
-
+    const unsigned extraStartTime = 15; // 15s extra start time, if a timeframe has already begun
     // earliest start is NOW
     // find a timeframe, that's LET has enough time left to fulfill the energy need of this request
     // the timeframe should end before <i_let> if i_let is not 0
-    // if no matching timeframe is found return is -1
+    // if no matching timeframe is found return empty inactive Timeframe
 
     unsigned long _now = TimeClk::unixtime2daytime(getTime());
-    unsigned long endTime  = _now + i_req;
+    unsigned long _dayoffset = (_now - (_now%(1 DAY)));
+    
     DEBUG_PRINT("find Frame for %u finish by %s (+%s) now:%s (%lus)\n", i_req,
-            Tstr(TimeClk::getTimeString(endTime)), Tstr(TimeClk::getTimeString(i_req)),  Tstr(TimeClk::getTimeString(_now)), _now );
+            Tstr(TimeClk::getTimeString(_now + i_req)), Tstr(TimeClk::getTimeString(i_req)),  Tstr(TimeClk::getTimeString(_now)), _now );
 
     int _idx = i_timf ? PROFILE_TIMEFRAME : PROFILE_START;
     int _endIdx   = i_timf ?  N_POW_PROFILES : PROFILE_TIMEFRAME;
@@ -366,8 +349,13 @@ int  POW::findTimeFrame( bool i_timf, unsigned i_req  )
      */
 
     long dT = 0; ///<  Offset for est and let to find a frame the next day(s)
-    unsigned candidate[N_TIMEFRAMES];
-    unsigned nCandidates = 0;
+
+    bool found = false;
+    struct {
+      unsigned prfIdx;
+      long     startTime;   // modified startTime
+      long     endTime;     // modified endTime
+    } candidate;
     do {
       for( int idx = _idx, endIdx = _endIdx; idx < endIdx; ++idx )
       {
@@ -375,65 +363,49 @@ int  POW::findTimeFrame( bool i_timf, unsigned i_req  )
           DEBUG_PRINT("\t");  
           dump_profile( prf );
           if ( prf.valid ) {
-              if ( prf.timeOfDay ) {
-                  _DEBUG_PRINT(" end: %s (%lu) vs end: %s(%lu) req:%s(%u) vs len: %lu \n"
-                          , Tstr(TimeClk::getTimeString(prf.let)), prf.let
-                          , Tstr(TimeClk::getTimeString(endTime)), endTime
-                          , Tstr(TimeClk::getTimeString(prf.let - prf.est)),(prf.let - prf.est)
-                          , i_req);
-                  if ( ((prf.let+dT) >= endTime) && ((prf.let - prf.est) >= i_req)) {
-                      DEBUG_PRINT("\t\t possible candidate absolute daytime %d:\n", idx);
-                      dump_profile( prf );
-                      if ( ret >= N_POW_PROFILES ) ret = idx;
-                      candidate[nCandidates++] = idx;  
-                      //break;
-                  }
-              } else {
-                  DEBUG_PRINT(" relend: %s (%u) vs req:%s(%u) vs len: %s(%u) \n",  Tstr(TimeClk::getTimeString(prf.let)), prf.let
-                          , Tstr(TimeClk::getTimeString(i_req)), i_req
-                          , Tstr(TimeClk::getTimeString(prf.let - prf.est)),(prf.let - prf.est));
-                  if ( (prf.let - prf.est) >= i_req) {
-                      DEBUG_PRINT("\n\t possible candidate relative Time %d:\n", idx);
-                      dump_profile( prf );
-                      candidate[nCandidates++] = idx;  
-                      if ( ret >= N_POW_PROFILES ) ret = idx;
-                      //break;
-                  }
-              }
-          }
+                _DEBUG_PRINT(" end: %s (%lu) vs end: %s(%lu) req:%s(%u) vs len: %lu \n"
+                        , Tstr(TimeClk::getTimeString(prf.let)), prf.let
+                        , Tstr(TimeClk::getTimeString(endTime)), endTime
+                        , Tstr(TimeClk::getTimeString(prf.let - prf.est)),(prf.let - prf.est)
+                        , i_req);
+                    
+                unsigned long startTime = prf.est + ( prf.timeOfDay ? (_dayoffset + dT)  : _now); // relative timeframes are always in the future
+                unsigned long endTime   =  prf.let + ( prf.timeOfDay ? (_dayoffset + dT)  : _now);
+                if (startTime < _now) startTime = _now+extraStartTime; //  if timeframe has already startet, give EM some extra time for start and try
+                long tfLength = (startTime - endTime);
+                if ( (endTime > startTime) && (tfLength >= i_req) ) {
+                    DEBUG_PRINT("\t\t possible candidate absolute daytime %d:\n", idx); dump_profile( prf );
+                    if (!found || candidate.startTime > startTime)
+                    {
+                      candidate.prfIdx =  idx;
+                      candidate.startTime = startTime;
+                      candidate.endTime = endTime;
+                      DEBUG_PRINT("%s candidate: idx:%u :> %d-%s (%u / %u) -> %s (%u) \n\t", found ? "better" : "a", idx, dT
+                          , Tstr(TimeClk::getTimeString(candidate.startTime)), candidate.startTime, prf.est
+                          , Tstr(TimeClk::getTimeString(candidate.endTime)), candidate.endTime );
+                      found = true;
+                    }    
+                }
+            }
       }
       dT += 1 Day; // try again tomorrow
-      if ( ret >= N_POW_PROFILES )  DEBUG_PRINT(" no frame found try again tomorrow\n");
-    } while (  ( ret >= N_POW_PROFILES ) && (dT <= 1 Day) );
-
-
-    // find the best candidate!
-    ret = N_POW_PROFILES;
-    for ( unsigned n=0; n < nCandidates; ++n){     
-      if (n == 0) DEBUG_PRINT("found matching Timeframes:\n");
-      DEBUG_PRINT("ftf(%u) idx: %u: ", n, candidate[n]); dump_profile( g_prefs.powProfile[candidate[n]] );
-      if ( ret < N_POW_PROFILES ) {
-        if ( g_prefs.powProfile[ret].est > g_prefs.powProfile[candidate[n]].est ) {
-          ret = candidate[n];
-          DEBUG_PRINT("better match:%u \t", ret );  dump_profile( g_prefs.powProfile[ret] );
-        }
-      } else {
-        ret = candidate[n];  // first candidate
-      }
-    }
-    if (ret < N_TIMEFRAMES) {
-        DEBUG_PRINT("found Timeframe %d: ", ret);
-        dump_profile( g_prefs.powProfile[candidate[ret]] );
-    }
-
-    return ret >= N_POW_PROFILES ? -1 : int(ret);
+      if ( !found )  DEBUG_PRINT(" no frame found try again tomorrow\n");
+    } while (  !found && (dT <= 1 Day) );
+    
+ // PowProfile( bool i_tf, bool     i_tod,bool   i_armed, bool i_repeat,  unsigned i_est, unsigned i_let, unsigned i_req, unsigned i_opt )
+    
+    return found ? PowProfile(  i_timf 
+                               ,g_prefs.powProfile[candidate.prfIdx].timeOfDay
+                               ,true, false
+                               ,candidate.startTime, candidate.endTime
+                               ,i_req, 0 )
+                 : PowProfile() ;
 }
 
 void POW::prolongActivePlan()
 {
-  DEBUG_PRINT(" prolongActivePlan  by %u\n", g_prefs.ad_prolong_inc);
-    
-    m_semp->updateEnergy( getTime(),  0,  0, g_prefs.ad_prolong_inc );
+   DEBUG_PRINT(" prolongActivePlan  by %u\n", g_prefs.ad_prolong_inc); 
+   m_semp->updateEnergy( getTime(),  0,  0, g_prefs.ad_prolong_inc );
 }
 
 void POW::procAdRequest()
@@ -446,25 +418,24 @@ void POW::procAdRequest()
     // this can be handled more intelligently... but after brewing over this, i decided it would not be worth the effort
 
 
-    int idx = findTimeFrame( PowProfile::TIMF, Wh2Ws(g_prefs.defCharge)/g_prefs.assumed_power );
-    if ( idx >=0 ) {
-        DEBUG_PRINT(" matching timeframe: %d\n", idx);
+    PowProfile powPrf = findTimeFrame( PowProfile::TIMF, Wh2Ws(g_prefs.defCharge)/g_prefs.assumed_power );
+    if ( powPrf.valid ) {
+        DEBUG_PRINT(" matching timeframe:" ); dump_profile( powPrf );
         m_semp->deleteAllPlans(); 
         setPwr( false );
-        g_LED.set( 0x5f, 8, true);
-        PowProfile& prf = g_prefs.powProfile[idx];
+        if(m_applicationCB) m_applicationCB( APP_REQ, 0);
         unsigned long _now = getTime();
-        dump_profile( prf );
-        if ( prf.timeframe ) {
-            DEBUG_PRINT(" modifyPlanTime(0, prf:%d\n", idx);
+        if ( powPrf.timeframe ) {
+            DEBUG_PRINT(" modifyPlanTime(0,...)\n" );
             unsigned dayoffset = _now - (_now%(1 DAY));
             unsigned required = Wh2Ws(g_prefs.defCharge)/g_prefs.assumed_power;
-            if ( prf.est + dayoffset < _now ) dayoffset += 1 Day; 
-            m_semp->modifyPlanTime(0, _now, required,  prf.opt,  prf.est + dayoffset, prf.let + dayoffset );
+            //if ( powPrf.est + dayoffset < _now ) dayoffset  += 1 Day; 
+            //if ( powPrf.let + dayoffset < _now ) powPrf.let += 1 Day;
+            m_semp->modifyPlanTime(0, _now, required,  powPrf.opt,  powPrf.est + dayoffset, powPrf.let + dayoffset );
         } else {
-            DEBUG_PRINT(" modifyPlan(0, prf:%d\n", idx);
+            DEBUG_PRINT(" modifyPlan(0, prf:%d\n", powPrf.est);
             unsigned required = g_prefs.defCharge;
-            m_semp->modifyPlan(0, _now, required,  prf.opt,  prf.est + _now, prf.let + _now );
+            m_semp->modifyPlan(0, _now, required,  powPrf.opt,  powPrf.est + _now, powPrf.let + _now );
         }
     }
 }
@@ -477,11 +448,9 @@ ad_event_t POW::autoDetect() {
      * detect end of energy need by power falling below lower threshold for more than specified time
      */
 
-
     static unsigned long _start;
     unsigned long        _now = getTime();
-    if ( relayState &&
-         g_prefs.autoDetect ) {
+    if ( relayState && (online || g_gsi) && g_prefs.autoDetect ) {
 
         DEBUG_PRINT(" autoDetect state: %d   PWR: %u   dt=%lu\n", m_ad_state, activePwr, (_now- _start) );
         switch ( m_ad_state ) {
@@ -501,7 +470,6 @@ ad_event_t POW::autoDetect() {
         } else {
             DEBUG_PRINT(" autoDetect state:AD_TEST_ON  BELOW THRESHOLD  ==> AD_OFF\n" );
             m_ad_state = AD_OFF;    _start = _now;
-
         }
         break;
 
@@ -548,7 +516,7 @@ void POW::loop()
             requestedEnergy = activePlan->m_requestedEnergy;
             optionalEnergy  = activePlan->m_optionalEnergy;
         } else {
-          if ( m_ad_state == AD_ON )  m_ad_state = AD_OFF;
+          if ( m_ad_state == AD_ON )  endOfPlan();
         }
 
         if ( m_sense ) {
@@ -605,17 +573,12 @@ void POW::loop()
         } else if ( autoDetectState  == AD_END_REQUEST ) {
             DEBUG_PRINT(" Autodetected  End of Energy Request\n");
             m_semp->resetPlan(); 
-            setPwr( false );
-            g_LED.reset();
+            endOfPlan();
         } else {
             // prolong active Plan if job not completed
             if ( activePlan && (activePlan->end() - _time < g_prefs.ad_prolong_inc) ) 
               activePlan->updateEnergy(  _time, relayState, 0, 0,  g_prefs.ad_prolong_inc);
         }
-
-        if ( m_application )   m_application();
-
-
 
         ////////////////////////////////
         { 
@@ -640,6 +603,7 @@ void POW::loop()
         m_semp->updateTime( _time, m_relayLogic^relayState );
         m_semp->setPwr( averagePwr, m_minPwr, m_maxPwr);
         _DEBUG_PRINT("POW update end\n");
+        if(m_applicationCB) m_applicationCB( APP_IDLE, 0);
     }
 }
 
@@ -649,7 +613,7 @@ void POW::setPwr(bool i_state )
 {
     if ( relayState != i_state ) {
       digitalWrite( relayPin, m_relayLogic^(m_relayState = i_state) );
-      m_semp->setEmState( relayState ? EM_ON : EM_OFF );
+      m_semp->setEmState( relayState ); // update/acknowledge state
     }
 }
 
@@ -668,7 +632,10 @@ void POW::rxEmState(EM_state_t i_em_state, unsigned /*i_recommendedPwr*/ )
 
 void  POW::endOfPlan(  )
 {
-    g_LED.reset();
+    Serial.println(" EndOf Plan!");
+    DEBUG_PRINT("End OF Plan!!\n");
+    setPwr( false ); ///< this will reflect EM state EM_OFF to semp object
+    if(m_applicationCB) m_applicationCB( APP_EOR, 0);
     resetAutoDetectionState();
 }
 
@@ -680,7 +647,6 @@ void POW::setLED(bool i_state )
 void POW::toggleRelay()
 {
     setPwr( !relayState );
-   
 }
 
 void POW::toggleLED()
@@ -690,7 +656,7 @@ void POW::toggleLED()
 
 void dump_profile( PowProfile& i_prf )
 {
-#define value2timeStr( vs )   (snprintf_P( (vs##_s), sizeof(vs##_s), PSTR("%2lu:%02lu"), (((vs)  % 86400L) / 3600), (((vs)  % 3600) / 60) ), (vs##_s))
+#define value2timeStr( vs )   (snprintf_P( (vs##_s), sizeof(vs##_s), PSTR("%1u.%02lu:%02lu"), (vs/86400L),(((vs)  % 86400L) / 3600), (((vs)  % 3600) / 60) ), (vs##_s))
 
     DEBUG_PRINT("Profile:");
     DEBUG_PRINT("%s %5s %3s %4s %3s %7u-%7u |  %7s/%7s  r:%u/o:%u\n", i_prf.valid ? "[*]" : "[ ]",
@@ -708,7 +674,6 @@ void dump_profile( PowProfile& i_prf )
 void POW::dump() 
 {
     DEBUG_PRINT("Profiles:");
-
 }
 
 
@@ -724,14 +689,14 @@ void POW_R1::setInterrupts() {
     attachInterrupt(HLW8012_CF_PIN,  hlw_cf_interrupt,  CHANGE   );
 }
 
-POW_R1::POW_R1( uSEMP* i_semp): POW( i_semp) 
+POW_R1::POW_R1( uSEMP* i_semp, AppCb_t i_appCb ): POW( i_semp, i_appCb ) 
 {
     // Sonoff POW Rev1
     DEBUG_PRINT(" POW instance Sonoff POW Rev1\n" );
     m_sense = new PwrSensHLW8012();
     m_ledPin      = LED_PIN_R1;
-    m_relayPin    = RELAY_PIN;
-    m_buttonPin   = 0;
+    m_relayPin    = RELAY_PIN_R1;
+    m_buttonPin   = BUTTON_PIN_R1;
     m_ledLogic  = true; // inverted
     m_relayLogic = false;
     if(m_sense) {
@@ -753,27 +718,62 @@ POW_R1::POW_R1( uSEMP* i_semp): POW( i_semp)
     setInterrupts();
 } 
 
-POW_R2::POW_R2( uSEMP* i_semp) : POW( i_semp) 
+void POW_R3::setInterrupts() {
+    g_HLW = static_cast<PwrSensHLW8012*>(m_sense)->getHLW8012();
+    attachInterrupt(HLW8012_CF1_PIN, hlw_cf1_interrupt, CHANGE   );
+    attachInterrupt(HLW8012_CF_PIN,  hlw_cf_interrupt,  CHANGE   );
+}
+
+POW_R3::POW_R3( uSEMP* i_semp, AppCb_t i_appCb ): POW( i_semp, i_appCb ) 
+{
+    DEBUG_PRINT(" POW instance Gosund SP1\n" );
+    m_sense = new PwrSensHLW8012();
+    m_ledPin      = LED_PIN_R3;
+    m_relayPin    = RELAY_PIN_R3;
+    m_buttonPin   = BUTTON_PIN_R3;
+    m_ledLogic  = true; // inverted
+    m_relayLogic = false;
+    if(m_sense) {
+        ((PwrSensHLW8012*) m_sense)->begin(HLW8012_CF_PIN_R3, HLW8012_CF1_PIN_R3, HLW8012_SEL_PIN_R3, CURRENT_MODE, true); 
+
+        DEBUG_PRINT(" set resistors\n" );
+
+        // HLW8012 specific
+        // These values are used to calculate current, voltage and power factors as per datasheet formula
+        // These are the nominal values for the Sonoff POW resistors:
+        // * The CURRENT_RESISTOR is the 1milliOhm copper-manganese resistor in series with the main line
+        // * The VOLTAGE_RESISTOR_UPSTREAM are the 5 470kOhm resistors in the voltage divider that feeds the V2P pin in the HLW8012
+        // * The VOLTAGE_RESISTOR_DOWNSTREAM is the 1kOhm resistor in the voltage divider that feeds the V2P pin in the HLW8012
+        m_sense->setResistors(CURRENT_RESISTOR, VOLTAGE_RESISTOR_UPSTREAM_R3, VOLTAGE_RESISTOR_DOWNSTREAM);
+    }
+
+    setup();
+
+    setInterrupts();
+} 
+
+
+POW_R2::POW_R2( uSEMP* i_semp, AppCb_t i_appCb ) : POW( i_semp, i_appCb ) 
 {
     // Sonoff POW Rev2
     DEBUG_PRINT(" POW instance Sonoff POW Rev2\n" );
     m_sense = new PwrSensCSE7766();
     m_ledPin      = LED_PIN_R2;
-    m_relayPin    = RELAY_PIN;
-    m_buttonPin   = 0;
+    m_relayPin    = RELAY_PIN_R2;
+    m_buttonPin   = BUTTON_PIN_R2;
     m_ledLogic  = false;
     m_relayLogic = false;
     if(m_sense) ((PwrSensCSE7766*) m_sense)->begin( CSE7766_PIN, 4800 );
     setup();
 }
 
-POW_Sim::POW_Sim( uSEMP* i_semp) : POW( i_semp) 
+POW_Sim::POW_Sim( uSEMP* i_semp, AppCb_t i_appCb ) : POW( i_semp, i_appCb ) 
 {
     DEBUG_PRINT(" POW instance Simu\n" );
     m_sense = new PwrSensSim();
     m_ledPin    = LED_BUILTIN;
-    m_relayPin  = 12;
-    m_buttonPin = 0;
+    m_relayPin  = RELAY_PIN_R0;
+    m_buttonPin = BUTTON_PIN_R0;
 
     m_ledLogic  = false;
     m_relayLogic = false;

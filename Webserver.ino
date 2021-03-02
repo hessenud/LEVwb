@@ -62,8 +62,10 @@ void setupWebSrv()
         http_server.on("/stat",       HTTP_GET, handleStat );
         http_server.on("/ctl",        HTTP_GET, handleCtl );
         http_server.on("/setProfile", HTTP_GET, handleSetProfile );
+
         http_server.on("/getProfiles",HTTP_GET, handleGetProfiles );
         http_server.on("/setConfig",  HTTP_GET, handleSetConfig );
+        http_server.on("/setTimer",   HTTP_GET, handleSetTimer );
 
         http_server.on("/reqDaily",  HTTP_GET, []() { dailyChores (false); replyOKWithMsg("Plans set");} );
 
@@ -158,13 +160,13 @@ void handleCtl() {
             g_pow->setPwr(false);
         } else if (pName == String("togOnline")) {
           if ( g_pow->online ) {
-             g_pow->online = false;
-             g_semp->acceptEMSignal( false );
+              g_pow->online = false;
           } else {
             g_pow->online = true;
-            g_semp->acceptEMSignal( true );
-            g_semp->setEmState( g_pow->relayState ? EM_ON : EM_OFF );
           }
+          g_semp->acceptEMSignal( g_pow->online );
+          g_semp->setEmState( g_pow->relayState );
+
         } else if (pName == String("chrgProfile")) {
             if (pVal == "std"){
                 requestProfile( 0 );
@@ -219,6 +221,33 @@ void handleGetProfiles()
     replyOKWithMsg(  resp);
 }
 
+void handleGetTimers()
+{
+    const int capacity = JSON_ARRAY_SIZE(N_POW_PROFILES+1) + (N_TMR_PROFILES+1)*JSON_OBJECT_SIZE(8);
+    StaticJsonDocument<capacity> doc;
+    for (unsigned n=0; n < N_POW_PROFILES; ++n) {
+        doc[n]["timeOfDay"] = g_prefs.powProfile[n].timeOfDay;
+        doc[n]["armed"]     = g_prefs.powProfile[n].armed;
+        doc[n]["repeat"]    = g_prefs.powProfile[n].repeat;
+
+        doc[n]["est"]       =  value2timeStr( g_prefs.powProfile[n].est );
+        doc[n]["let"]       =  value2timeStr( g_prefs.powProfile[n].let );
+        doc[n]["req"]       = g_prefs.powProfile[n].req;
+        doc[n]["opt"]       = g_prefs.powProfile[n].opt;
+
+        DEBUG_PRINT("EST(%u): %u -> %s\n", n, g_prefs.powProfile[n].est, g_prefs.powProfile[n].est_s);
+        DEBUG_PRINT("LET(%u): %u -> %s\n", n, g_prefs.powProfile[n].let, g_prefs.powProfile[n].let_s);
+    }
+
+    String resp;
+    if (serializeJsonPretty(doc, resp) == 0) {
+        DEBUG_PRINT(PSTR("Failed to serialize"));
+    }
+
+    DEBUG_PRINT(PSTR("Profiles(%u): \n%s\n"),N_POW_PROFILES, resp.c_str());
+    replyOKWithMsg(  resp);
+}
+
 void handleSetConfig()
 {
      DEBUG_PRINT("handleSetConfig:\n");
@@ -264,6 +293,38 @@ void handleSetConfig()
     
     replyOK();
     
+}
+
+void handleSetTimer()
+{
+    long sw_time= 0;
+    bool armed = false;
+    bool mode = false;
+    bool daily = false;
+    long interval = 0;
+
+    int tmr = -1;
+    for( int n = 0; n < http_server.args(); ++n)
+    {
+        String pName = http_server.argName(n);
+        String pVal = http_server.arg(n);
+        int value= atoi( pVal.c_str() );
+
+        DEBUG_PRINT("p%dName: %s  val: %s\n",n, pName.c_str(), pVal.c_str() );
+        if (pName == String("timer"))           { tmr = value&N_TMR_PROFILES;
+                } else if (pName == String("sw_time"))      { sw_time  = TimeClk::timeStr2Value(pVal.c_str());
+                } else if (pName == String("interval"))     { interval   = value;
+                } else if (pName == String("armed"))        { armed   = pVal;
+                } else if (pName == String("switchmode"))   { mode   = pVal;
+                } else if (pName == String("everyday"))     { daily   = pVal;
+                } else {
+                }
+    }
+
+    if ( tmr>=0)    g_prefs.tmrProfile[tmr] = uTimerCfg(sw_time, interval, mode, armed, daily );
+
+
+    replyOKWithJSON(  "{}");
 }
 
 void handleSetProfile()
@@ -346,6 +407,8 @@ void requestProfile(unsigned i_profile)
 void mkStat( String& resp) {
     PlanningData* activePlan = g_semp->getActivePlan(); 
     StaticJsonDocument<512> stat;
+    stat["device_name"] = g_prefs.device_name;
+
     // Set the values in the document
     stat["voltage"]     = g_pow->voltage;
     stat["pwr"]         = g_pow->activePwr;
