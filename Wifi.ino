@@ -26,8 +26,9 @@ String IpAddress2String(const IPAddress& ipAddress)
 void setupWIFI() {
   // put your setup code here, to run once:
 #ifdef USE_WIFIMANAGER
-  
   //WiFiManager
+  
+  WiFi.mode(WIFI_STA);
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
   //reset settings - for testing
