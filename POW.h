@@ -514,6 +514,7 @@ public:
 
     void resetAutoDetectionState() { m_ad_state = AD_OFF; }
     void handlePwrReq();
+    void handleSimReq();
     void handleCalReq();
     void handleEnergyReq();
     void handleSimpleReq();

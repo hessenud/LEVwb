@@ -312,6 +312,29 @@ void POW::handleCalReq()
     replyOKWithMsg( resp);
 }
 
+
+void POW::handleSimReq()
+{
+    String resp;
+    for( int n = 0; n < http_server.args(); ++n)
+    {
+        String p1Name = http_server.argName(n);
+        String p1Val = http_server.arg(n);
+        //float value= atof( p1Val.c_str() );
+        DEBUG_PRINT("p%dName: %s  val: %s\n",n, p1Name.c_str(), p1Val.c_str() );
+        if (p1Name == String("pwron"))         {  resp = "pwron";  setSimPwr( true );
+        } else if (p1Name == String("pwroff")) {  resp = "pwroff"; setSimPwr( false );
+        } else if (p1Name == String("factor")) {  resp = "factor: " + p1Val;
+        } else {
+            replyNotFound( resp );
+            return;
+        }
+    }
+    DEBUG_PRINT("PWR req: %s\n",resp.c_str());
+
+    replyOKWithMsg( resp + "OK!");
+}
+
 void POW::handlePwrReq()
 {
     bool def = true;
@@ -697,8 +720,10 @@ void POW::setRelay(bool i_state )
  */
 void POW::rxEmState(EM_state_t i_em_state, unsigned /*i_recommendedPwr*/ )
 {
-    if ( online && (i_em_state != EM_OFFLINE) ) {
-        setRelay( i_em_state == EM_ON );
+    if ( online ) {
+        if(i_em_state != EM_OFFLINE) {
+            setRelay( i_em_state == EM_ON );
+        }
     }
 }
 
@@ -708,6 +733,7 @@ void  POW::endOfPlan(  )
     setRelay( false ); ///< this will reflect EM state EM_OFF to semp object
     if(m_applicationCB) m_applicationCB( APP_EOR, 0);
     resetAutoDetectionState();
+    m_semp->acceptEMSignal( (online = true) );
 }
 
 void POW::setLED(bool i_state )

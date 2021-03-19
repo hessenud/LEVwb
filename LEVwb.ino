@@ -1,6 +1,3 @@
-
-#define _DEV_BOARD     /////////<<<<<<< DEVELOPER Board Selection  set befor inlcudes!!
-
 //-----------------------------------------------------------------
 //--- Configuration -----------------------------------------------
 //-----------------------------------------------------------------
@@ -23,18 +20,10 @@ RemoteDebug Debug;
 #endif
 
 
-#ifdef DEV_BOARD
 # define DEV_IDX 2
 # define DEV_BASENAME "DevBoard"
 # define DEV_EXT " CHG"
 # define HOSTNAME "DEVPOW_" DEV_NR 
-#else
-// the real deal
-# define DEV_IDX 2
-# define DEV_EXT
-# define DEV_BASENAME "ThePOW"
-# define HOSTNAME "TPOW_" DEV_NR 
-#endif
 
 
 #define MQTTBROKER  "raspi"

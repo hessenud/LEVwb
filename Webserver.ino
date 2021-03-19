@@ -55,6 +55,7 @@ void setupWebSrv()
         http_server.on("/off",  HTTP_GET, []() { g_pow->setRelay(false); handleStat(); });
 
         http_server.on("/pwr", HTTP_GET,        mkDelegate( g_pow, handlePwrReq) ); 
+        http_server.on("/sim", HTTP_GET,        mkDelegate( g_pow, handleSimReq) );
         http_server.on("/calibrate", HTTP_GET,  mkDelegate( g_pow, handleCalReq) ); 
         http_server.on("/energy", HTTP_GET,     mkDelegate( g_pow, handleEnergyReq));
         http_server.on("/simplerq", HTTP_GET,     mkDelegate( g_pow, handleSimpleReq));
@@ -367,6 +368,8 @@ void handleSetProfile()
     for(unsigned n=0;n < N_POW_PROFILES;++n) {
                dump_profile( g_prefs.powProfile[n] );
     }
+
+    savePrefs();
     replyOKWithJSON(  "{}");
 }
 
