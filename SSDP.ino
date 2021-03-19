@@ -37,7 +37,7 @@ void setupSSDP()
     _DEBUG_PRINT(" SSDP Scheme:\n%s\n", ssdpScheme );        
 
     semp_server.on(String("/") + ssdpcfg.descriptionURL, HTTP_GET, [ssdpScheme,ssdpcfg]() {
-        DEBUG_PRINT("SSDP request /%s\n%s", ssdpcfg.descriptionURL, ssdpScheme );
+        _DEBUG_PRINT("SSDP request /%s\n%s", ssdpcfg.descriptionURL, ssdpScheme );
         semp_server.send(200, "text/xml", ssdpScheme );
     });
     //-------  Schema overwrite END    

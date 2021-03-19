@@ -16,7 +16,7 @@ void  setTimer( const uTimerCfg& ) // i_cfg )
 
 void genTimer( const uTimerCfg& i_cfg )
 {
-    uTimer* tmr = new uTimer( i_cfg, [](bool s) { g_pow->setPwr( s ); g_LED.set( 0x5f, 8, true);} );
+    uTimer* tmr = new uTimer( i_cfg, [](bool s) { g_pow->setRelay( s ); g_LED.set( 0x5f, 8, true);} );
     g_Timerlist.append( tmr );
 }
 
@@ -79,7 +79,7 @@ void setTimers()
                 DEBUG_PRINT(" Timer(%u) in %s\n", n, TimeClk::getTimeString( g_prefs.tmrProfile[n].sw_time) );
                 g_Timers[n].set(g_prefs.tmrProfile[n], [n](bool s) {
                     DEBUG_PRINT(" Timer(%u) set Pwr %s\n", n, s ? "ON": "OFF" );
-                    g_pow->setPwr( s ); 
+                    g_pow->setRelay( s );
                     if ( s ) g_LED.set( 0x5f, 8, true);
                     else g_LED.reset();
                   }
@@ -90,7 +90,7 @@ void setTimers()
 void setupTimeClk(int i_timeZone)
 {
     ///@todo: there are some good libraries for ntp/timezone etc out there...  eventually use them
-    g_Clk.begin( i_timeZone );
+    g_Clk.begin( i_timeZone, "fritz.box" );
     g_Timerlist.append( new uTimer( TimeClk::daytime2unixtime(1 Hrs, getTime()) /*0100h*/, 1 DAY, true, true, dailyChores ));
 
 }

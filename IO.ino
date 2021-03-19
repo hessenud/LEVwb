@@ -20,8 +20,7 @@ void handleAppEvt( AppEvt_t i_evt, void* i_par)
         break;
     case APP_REQ: // new request active
         g_LED.set( 0x5f, 8, true);
-         g_pow->online= true; // default is: resume control by EM if a new request is planned
-       
+        g_pow->online= true; // default is: resume control by EM if a new request is planned
         DEBUG_PRINT("handleAppEvt: NEW REQUEST gone ACTIVE%d par:%p\n", i_evt, i_par);
         break;
     case APP_IDLE:
@@ -81,13 +80,14 @@ void buttonControl()
      case PushButton::DBLCLICK: 
           g_Morse.next("..  --  ", true );
           g_LED.reset();
-          g_pow->setPwr( true );
-          DEBUG_PRINT(" DBLCLICK!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
+          static bool s_simOn = true;
+          g_pow->setSimPwr( (s_simOn ^=true) );
+          DEBUG_PRINT(" DBLCLICK!!!: %s\n", s_simOn ? "SIM ON" :"SIM OFF");
           break;
      case PushButton::TRIPLECLICK:
           g_Morse.next(".. ---  ", true );
           g_LED.reset();
-          g_pow->setPwr( false );
+          g_pow->setRelay( false );
           DEBUG_PRINT(" TRIPLECLICK!!!: %s\n", g_pow->relayState ? "ON" :"OFF");
           break;
      case PushButton::QUADCLICK:

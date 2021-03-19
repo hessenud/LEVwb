@@ -92,23 +92,33 @@ void saveCalibration(POW* i_pow)
 }
 
 
+
+#include "POW.h"
+
+void POW::loadPrefs(DynamicJsonDocument&cfg)
+{
+    //--- device description
+}
+
+void POW::savePrefs(DynamicJsonDocument&cfg)
+{
+    //--- device description
+}
+
 void saveDevice()
 {
-
     DynamicJsonDocument cfg(Prefs::capacity);
 
-
     //--- device description
-    storePref(  ota_passwd );
-    storePref(  hostname );
+    storePref(  ota_passwd, g_prefs );
+    storePref(  hostname, g_prefs );
 
-    storePref(  device_name);
-    storePref(  model_name);
-    storePref(  serialNr  );
-    storePref(  modelVariant);
-    storePref(  maxPwr ); 
-    storePref(  use_oled ); 
-
+    storePref(  device_name, g_prefs);
+    storePref(  model_name, g_prefs);
+    storePref(  serialNr, g_prefs  );
+    storePref(  modelVariant, g_prefs);
+    storePref(  maxPwr, g_prefs );
+    storePref(  use_oled, g_prefs );
 
     // Serialize JSON to file
     File file = fileSystem->open(DEVICE_FILE, "w+");
@@ -128,18 +138,18 @@ void loadDevice()
     // Deserialize the JSON document
     DeserializationError error = deserializeJson(cfg, file);
     if ((error != DeserializationError::Ok )) { 
-        saveDevice();
+        saveDevice( );
     } else {
-        loadPrefStr(  ota_passwd, "wadsdapassvoid");
-        loadPrefStr(  hostname, HOSTNAME); 
-        loadPrefStr(  device_name, DEVICE_NAME); 
-        loadPrefStr(  model_name, HOSTNAME " Dev"  );
-        loadPref(     serialNr, 9999  ); 
-        loadPref(     updateTime, 1000  ); 
-        loadPref(     modelVariant,  0 ); 
+        loadPrefStr(  ota_passwd, "wadsdapassvoid", g_prefs);
+        loadPrefStr(  hostname, HOSTNAME, g_prefs);
+        loadPrefStr(  device_name, DEVICE_NAME, g_prefs);
+        loadPrefStr(  model_name, HOSTNAME " Dev", g_prefs );
+        loadPref(     serialNr, 9999, g_prefs  );
+        loadPref(     updateTime, 1000, g_prefs  );
+        loadPref(     modelVariant,  0, g_prefs );
 
-        loadPref(     maxPwr, MAX_CONSUMPTION );
-        _loadPref(     use_oled ); 
+        loadPref(     maxPwr, MAX_CONSUMPTION, g_prefs );
+        _loadPref(     use_oled, g_prefs );
 
     }
 
@@ -152,23 +162,23 @@ void saveParams()
     DynamicJsonDocument cfg(Prefs::capacity);
 
     //--- device setting
-    storePref(  assumed_power); 
-    storePref(  mqtt_broker); 
-    storePref(  mqtt_broker_port);
-    storePref(  mqtt_user); 
-    storePref(  mqtt_password);
-    storePref(  updateTime);
+    storePref(  assumed_power, g_prefs);
+    storePref(  mqtt_broker, g_prefs);
+    storePref(  mqtt_broker_port, g_prefs);
+    storePref(  mqtt_user, g_prefs);
+    storePref(  mqtt_password, g_prefs);
+    storePref(  updateTime, g_prefs);
 
-    storePref(  devType ); 
-    storePref(  intr   ); 
-    storePref(  defCharge );
+    storePref(  devType, g_prefs );
+    storePref(  intr, g_prefs   );
+    storePref(  defCharge, g_prefs );
 
-    storePref( autoDetect );         
-    storePref( ad_on_threshold );
-    storePref( ad_on_time );
-    storePref( ad_off_threshold );
-    storePref( ad_off_time );
-    storePref( ad_prolong_inc );
+    storePref( autoDetect, g_prefs );
+    storePref( ad_on_threshold , g_prefs);
+    storePref( ad_on_time, g_prefs );
+    storePref( ad_off_threshold, g_prefs );
+    storePref( ad_off_time, g_prefs );
+    storePref( ad_prolong_inc, g_prefs );
 
     // Serialize JSON to file
     File file = fileSystem->open(PREFS_FILE, "w+");
@@ -190,21 +200,21 @@ void loadParams()
     if ((error != DeserializationError::Ok )) { 
         saveParams();
     } else {
-        loadPref(     assumed_power, MAX_CONSUMPTION ); 
-        loadPrefStr(  mqtt_broker, ""  );
-        loadPref(     mqtt_broker_port, 0);
-        loadPrefStr(  mqtt_user, ""    ); 
-        loadPrefStr(  mqtt_password, ""); 
+        loadPref(     assumed_power, MAX_CONSUMPTION, g_prefs );
+        loadPrefStr(  mqtt_broker, "", g_prefs  );
+        loadPref(     mqtt_broker_port, 0, g_prefs);
+        loadPrefStr(  mqtt_user, "", g_prefs    );
+        loadPrefStr(  mqtt_password, "", g_prefs);
         
-        loadPref(     devType,  uSEMP::Other); 
-        _loadPref(     intr   );
-        loadPref(     defCharge, 2000 ); 
-        _loadPref(     autoDetect);         
-        loadPref(  ad_on_threshold, 0);
-        loadPref( ad_on_time, 0);
-        loadPref( ad_off_threshold, 0);
-        loadPref(  ad_off_time, 0);
-        loadPref( ad_prolong_inc, 0 );
+        loadPref(     devType,  uSEMP::Other, g_prefs);
+        _loadPref(     intr  , g_prefs );
+        loadPref(     defCharge, 2000, g_prefs );
+        _loadPref(     autoDetect, g_prefs);
+        loadPref(  ad_on_threshold, 0, g_prefs);
+        loadPref( ad_on_time, 0, g_prefs);
+        loadPref( ad_off_threshold, 0, g_prefs);
+        loadPref(  ad_off_time, 0, g_prefs);
+        loadPref( ad_prolong_inc, 0, g_prefs );
 
         if (g_prefs.maxPwr == 0)  g_prefs.maxPwr    = MAX_CONSUMPTION;
 
@@ -220,15 +230,15 @@ void saveChgPrf()
 
     // profiles
     for (unsigned n = 0; n < N_POW_PROFILES; ++n) {
-        storeProfileXMember( powProfile, n, valid );
-        storeProfileXMember( powProfile, n, timeOfDay );
-        storeProfileXMember( powProfile, n, timeframe );
-        storeProfileXMember( powProfile, n, armed );
-        storeProfileXMember( powProfile, n, repeat );
-        storeProfileXMember( powProfile, n, est );   
-        storeProfileXMember( powProfile, n, let) ;
-        storeProfileXMember( powProfile, n, req );
-        storeProfileXMember( powProfile, n, opt );
+        storeProfileXMember( powProfile, n, g_prefs, valid );
+        storeProfileXMember( powProfile, n, g_prefs, timeOfDay );
+        storeProfileXMember( powProfile, n, g_prefs, timeframe );
+        storeProfileXMember( powProfile, n, g_prefs, armed );
+        storeProfileXMember( powProfile, n, g_prefs, repeat );
+        storeProfileXMember( powProfile, n, g_prefs, est );
+        storeProfileXMember( powProfile, n, g_prefs, let) ;
+        storeProfileXMember( powProfile, n, g_prefs, req );
+        storeProfileXMember( powProfile, n, g_prefs, opt );
     }
 
     // Serialize JSON to file
@@ -244,15 +254,15 @@ void extractChgPrf(DynamicJsonDocument& cfg)
 {
     for (unsigned n = 0; n < N_POW_PROFILES; ++n) {
       
-        loadProfileXMember(powProfile, n, valid);
-        loadProfileXMember(powProfile, n, timeOfDay);
-        loadProfileXMember(powProfile, n, timeframe);
-        loadProfileXMember(powProfile, n, armed);
-        loadProfileXMember(powProfile, n, repeat);
-        loadProfileXMember(powProfile, n, est);
-        loadProfileXMember(powProfile, n, let);
-        loadProfileXMember(powProfile, n, req);
-        loadProfileXMember(powProfile, n, opt);
+        loadProfileXMember(powProfile, n, g_prefs, valid);
+        loadProfileXMember(powProfile, n, g_prefs, timeOfDay);
+        loadProfileXMember(powProfile, n, g_prefs, timeframe);
+        loadProfileXMember(powProfile, n, g_prefs, armed);
+        loadProfileXMember(powProfile, n, g_prefs, repeat);
+        loadProfileXMember(powProfile, n, g_prefs, est);
+        loadProfileXMember(powProfile, n, g_prefs, let);
+        loadProfileXMember(powProfile, n, g_prefs, req);
+        loadProfileXMember(powProfile, n, g_prefs, opt);
     }
 }
 
@@ -281,20 +291,20 @@ void saveTimers()
 
     DynamicJsonDocument cfg(Prefs::capacity);
     for (unsigned n = 0; n < N_TMR_PROFILES; ++n) {
-        storeProfileXMember(tmrProfile, n, valid);
-        storeProfileXMember( tmrProfile, n, sw_time );
-        storeProfileXMember( tmrProfile, n, interval );
-        storeProfileXMember( tmrProfile, n, mo );
-        storeProfileXMember( tmrProfile, n, tu );
-        storeProfileXMember( tmrProfile, n, we );
-        storeProfileXMember( tmrProfile, n, th );
-        storeProfileXMember( tmrProfile, n, fr );
-        storeProfileXMember( tmrProfile, n, sa );
-        storeProfileXMember( tmrProfile, n, su );
-        storeProfileXMember( tmrProfile, n, everyday );
-        storeProfileXMember( tmrProfile, n, repeat );
-        storeProfileXMember( tmrProfile, n, armed );
-        storeProfileXMember( tmrProfile, n, switchmode ); ///< true = on false = off
+        storeProfileXMember(tmrProfile, n, g_prefs, valid);
+        storeProfileXMember( tmrProfile, n, g_prefs, sw_time );
+        storeProfileXMember( tmrProfile, n, g_prefs, interval );
+        storeProfileXMember( tmrProfile, n, g_prefs, mo );
+        storeProfileXMember( tmrProfile, n, g_prefs, tu );
+        storeProfileXMember( tmrProfile, n, g_prefs, we );
+        storeProfileXMember( tmrProfile, n, g_prefs, th );
+        storeProfileXMember( tmrProfile, n, g_prefs, fr );
+        storeProfileXMember( tmrProfile, n, g_prefs, sa );
+        storeProfileXMember( tmrProfile, n, g_prefs, su );
+        storeProfileXMember( tmrProfile, n, g_prefs, everyday );
+        storeProfileXMember( tmrProfile, n, g_prefs, repeat );
+        storeProfileXMember( tmrProfile, n, g_prefs, armed );
+        storeProfileXMember( tmrProfile, n, g_prefs, switchmode ); ///< true = on false = off
     }
     // Serialize JSON to file
     File file = fileSystem->open(TMR_PROFILE_FILE, "w+");
@@ -308,20 +318,20 @@ void saveTimers()
 void extractTimers(DynamicJsonDocument& cfg)
 {
     for (unsigned n = 0; n < N_TMR_PROFILES; ++n) {
-        loadProfileXMember(tmrProfile, n, valid);
-        loadProfileXMember(tmrProfile, n, sw_time);
-        loadProfileXMember(tmrProfile, n, interval);
-        loadProfileXMember(tmrProfile, n, mo);
-        loadProfileXMember(tmrProfile, n, tu);
-        loadProfileXMember(tmrProfile, n, we);
-        loadProfileXMember(tmrProfile, n, th);
-        loadProfileXMember(tmrProfile, n, fr);
-        loadProfileXMember(tmrProfile, n, sa);
-        loadProfileXMember(tmrProfile, n, su);
-        loadProfileXMember(tmrProfile, n, everyday);
-        loadProfileXMember(tmrProfile, n, repeat);
-        loadProfileXMember(tmrProfile, n, armed);
-        loadProfileXMember(tmrProfile, n, switchmode); ///< true = on false = off
+        loadProfileXMember(tmrProfile, n, g_prefs, valid);
+        loadProfileXMember(tmrProfile, n, g_prefs, sw_time);
+        loadProfileXMember(tmrProfile, n, g_prefs, interval);
+        loadProfileXMember(tmrProfile, n, g_prefs, mo);
+        loadProfileXMember(tmrProfile, n, g_prefs, tu);
+        loadProfileXMember(tmrProfile, n, g_prefs, we);
+        loadProfileXMember(tmrProfile, n, g_prefs, th);
+        loadProfileXMember(tmrProfile, n, g_prefs, fr);
+        loadProfileXMember(tmrProfile, n, g_prefs, sa);
+        loadProfileXMember(tmrProfile, n, g_prefs, su);
+        loadProfileXMember(tmrProfile, n, g_prefs, everyday);
+        loadProfileXMember(tmrProfile, n, g_prefs, repeat);
+        loadProfileXMember(tmrProfile, n, g_prefs, armed);
+        loadProfileXMember(tmrProfile, n, g_prefs, switchmode); ///< true = on false = off
         setTimers();
     }
 }
@@ -350,87 +360,38 @@ void loadPrefs()
     // Device COnfiguration
     DEBUG_PRINT("JsonDeserializationBuffer capacity:%u\n", Prefs::capacity  );
 
-    DynamicJsonDocument cfg(Prefs::capacity);
     if (  LittleFS.exists( DEVICE_FILE ) ) {
         loadDevice();
         loadTimers();
         loadParams();
         loadChgPrf();
     } else {
-        // Convert old version
-        File file = LittleFS.open(PREFERENCES_FILE,"r");
-        // Deserialize the JSON document
-        DeserializationError error = deserializeJson(cfg, file);
-        if ((error != DeserializationError::Ok )) { 
-            DEBUG_PRINT("Failed to read file, using default configuration  error: %s\n",   error.c_str()   );
-            g_prefs.hostname = HOSTNAME;
-            g_prefs.device_name   = DEVICE_NAME;
-            g_prefs.model_name    = HOSTNAME " DevBoard" ;
-            g_prefs.modelVariant   = 1;
-            g_prefs.serialNr  = 1;
+        DEBUG_PRINT("Initialize prefs and FS");
+        g_prefs.hostname = HOSTNAME;
+        g_prefs.device_name   = DEVICE_NAME;
+        g_prefs.model_name    = HOSTNAME " DevBoard" ;
+        g_prefs.modelVariant   = 1;
+        g_prefs.serialNr  = 1;
 
-            g_prefs.use_oled  = false;
-            g_prefs.mqtt_broker   = "";
-            g_prefs.mqtt_broker_port = 0;
-            g_prefs.mqtt_user     = "";
-            g_prefs.mqtt_password = "";
+        g_prefs.use_oled  = false;
+        g_prefs.mqtt_broker   = "";
+        g_prefs.mqtt_broker_port = 0;
+        g_prefs.mqtt_user     = "";
+        g_prefs.mqtt_password = "";
 
-            g_prefs.updateTime    = 1000;
-            g_prefs.devType   = 0;
-            g_prefs.maxPwr    = MAX_CONSUMPTION;
+        g_prefs.updateTime    = 1000;
+        g_prefs.devType   = 0;
+        g_prefs.maxPwr    = MAX_CONSUMPTION;
 
-            g_prefs.assumed_power = MAX_CONSUMPTION;     ///< assumed power for calculations
-            g_prefs.intr      = true;
-            g_prefs.defCharge = 1000;
+        g_prefs.assumed_power = MAX_CONSUMPTION;     ///< assumed power for calculations
+        g_prefs.intr      = true;
+        g_prefs.defCharge = 1000;
 
-            file.close();
-            savePrefs();
-        } else {
-            DEBUG_PRINT(" use stored Prefs!!!\n");
-            loadPrefStr(  ota_passwd, "wadsdapassvoid");
-            loadPrefStr(  hostname, HOSTNAME);
-            loadPref(     assumed_power, MAX_CONSUMPTION );
-            loadPrefStr(  mqtt_broker, ""  );
-            loadPref(     mqtt_broker_port, 0);
-            loadPrefStr(  mqtt_user, ""    );
-            loadPrefStr(  mqtt_password, "");
-
-            loadPrefStr(  device_name, DEVICE_NAME);
-            loadPrefStr(  model_name, HOSTNAME " Dev"  );
-            loadPref(     serialNr, 9999  );
-
-            loadPref(     updateTime, 1000  );
-            loadPref(     modelVariant,  0 );
-
-            loadPref(     devType,  uSEMP::Other);
-            _loadPref(     use_oled );
-
-            loadPref(     maxPwr, MAX_CONSUMPTION );
-            _loadPref(     intr   );
-            loadPref(     defCharge, 2000 );
-            _loadPref(     autoDetect);
-            loadPref(  ad_on_threshold, 0);
-            loadPref( ad_on_time, 0);
-            loadPref( ad_off_threshold, 0);
-            loadPref(  ad_off_time, 0);
-            loadPref( ad_prolong_inc, 0 );
-
-            if (g_prefs.maxPwr == 0)  g_prefs.maxPwr    = MAX_CONSUMPTION;
-
-            extractTimers(cfg);
-
-            extractChgPrf(cfg);
-
-    saveDevice();
-    saveParams();
-    saveChgPrf();
-    saveTimers();
-    
-            file.close();
-        }
+        savePrefs();
+        loadPrefs();
+        return;
 
     } 
-
     g_prefs.loaded = true;
 }
 

@@ -61,7 +61,7 @@ GPIO16  None
 FLAG  None
 
  */
- 
+
 #define CSE7766_PIN             1
 // Needs CSE7766 Energy sensor, via Serial RXD 4800 baud 8E1 (GPIO1), TXD (GPIO3)
 
@@ -189,7 +189,7 @@ struct PowProfile {
      * create a valid Profile
      */
     PowProfile( bool i_tf, bool i_tod, bool i_armed, bool i_repeat,  unsigned i_est, unsigned i_let, unsigned i_req, unsigned i_opt )
-        :valid(true), timeframe(i_tf), timeOfDay(i_tod), armed(i_armed), repeat(i_repeat), est(i_est), let(i_let), req(i_req), opt(i_opt)
+    :valid(true), timeframe(i_tf), timeOfDay(i_tod), armed(i_armed), repeat(i_repeat), est(i_est), let(i_let), req(i_req), opt(i_opt)
     {
         *est_s=0;
         *let_s=0;
@@ -249,7 +249,7 @@ public:
             unsigned char currentWhen = HIGH,
             bool use_interrupts = true,
             unsigned long pulse_timeout = PULSE_TIMEOUT) { 
-              (void)pulse_timeout;
+        (void)pulse_timeout;
         // Initialize HLW8012
         // void begin(unsigned char cf_pin, unsigned char cf1_pin, unsigned char sel_pin, unsigned char currentWhen = HIGH, bool use_interrupts = false, unsigned long pulse_timeout = PULSE_TIMEOUT);
         // * cf_pin, cf1_pin and sel_pin are GPIOs to the HLW8012 IC
@@ -321,7 +321,7 @@ public:
 
 
 class PwrSensSim: public PwrSensor {
-
+    bool m_on;
     unsigned long m_last_update;
     unsigned m_sim_rd;
     static const unsigned hlw_sim[];
@@ -337,6 +337,7 @@ public:
 
     void begin( ) {
         m_sim_rd = 0;
+        m_on = true;
     };
 
     unsigned int getVoltage();
@@ -362,6 +363,10 @@ public:
     void setPowerMultiplier(double ) {  };
     void resetMultipliers() { }
 
+    void setSimPwr( bool i_on ) {
+        m_on = i_on;
+        DEBUG_PRINT("set SIM Pwr :%s\n", m_on ? "ON" : "OFF");
+       }
     void loop();
 
 };
@@ -376,19 +381,21 @@ public:
  */
 
 typedef enum  {
-    AD_REQUEST = 1,
     AD_IDLE    = 0,
-    AD_END_REQUEST = -1
+    AD_REQUEST,
+    AD_RQ_ACTIVE,
+    //-------------------
+    AD_END_REQUEST
 } ad_event_t;
 
 typedef enum     {
-  APP_IDLE,
-  APP_ON,     // Power goes off
-  APP_OFF,    // Power goes ON
-  APP_REQ,    // new Request scheduled
-  APP_EOR,    // end of active request
-  //-------------
-  APP_N_EVTS
+    APP_IDLE,
+    APP_ON,     // Power goes off
+    APP_OFF,    // Power goes ON
+    APP_REQ,    // new Request scheduled
+    APP_EOR,    // end of active request
+    //-------------
+    APP_N_EVTS
 } AppEvt_t;
 
 typedef std::function<void(AppEvt_t evt, void* par)> AppCb_t;
@@ -459,11 +466,12 @@ protected:
         AD_OFF,
         AD_TEST_ON,
         AD_ON,
-        AD_TEST_OFF
+        AD_TEST_OFF,
+        AD_EXTERNAL
     } ad_state_t;
 
     ad_state_t m_ad_state;
-
+    unsigned long m_ad_start;
 public:
 
     /**
@@ -472,14 +480,14 @@ public:
      */
     ad_event_t autoDetect(); 
 
-    
+
 public:
-    
+
     AppCb_t m_applicationCB;
 
     attr_reader( int, ledState );
     attr_reader( int, relayState );
-    
+
     attr_reader( int, buttonPin );  
     attr_reader( int, relayPin );
     attr_reader( int, ledPin );
@@ -508,20 +516,21 @@ public:
     void handlePwrReq();
     void handleCalReq();
     void handleEnergyReq();
+    void handleSimpleReq();
     void handleTimeReq();
     void requestProfile();
 
-   /**
+    /**
      * true means the device is under control of the EM
      * false => the device runs w/o EM control. E.g. on forced operation even when EM suggests OFF
      *          of when using a pure Timer, or alternative decision
      */
     bool online;
-    
+
     /**
      * @param i_state   bool true -> relay/pwr on
      */
-    void setPwr(bool i_state );
+    void setRelay(bool i_state );
 
     /**
      * signal EnergyManager State to POW 
@@ -534,16 +543,24 @@ public:
     /**
      * signal active plan is exhausted
      */
-    void endOfPlan(  );
-    
+    void endOfPlan();
+
     void toggleRelay();
     void setLED(bool i_state );
     void toggleLED();
 
     void loop();
 
+    void savePrefs(DynamicJsonDocument&cfg);
+    void loadPrefs(DynamicJsonDocument&cfg);
 
     void dump();
+    void suspendAutodetect();
+
+    /**
+     * @param   false -> no power measurement even if relay is on
+     */
+    virtual void setSimPwr(bool  ) {};
 };
 
 
@@ -566,15 +583,18 @@ public:
 };
 
 class POW_R3: public POW {
-      void setInterrupts();
+    void setInterrupts();
 public:
     POW_R3( uSEMP* i_semp, AppCb_t i_appCb );
 };
 
 
 class POW_Sim: public POW {
+
 public:
     POW_Sim( uSEMP* i_semp, AppCb_t i_appCb );
+    virtual void setSimPwr(bool i_on) {
+        ((PwrSensSim*) m_sense)->setSimPwr( i_on ); };
 };
 
 

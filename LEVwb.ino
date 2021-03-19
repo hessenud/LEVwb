@@ -143,7 +143,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 const char* state2txt( int state)
 {
-    return state== HIGH ? "HIGH" : "LOW";
+    return state== HIGH ? "ON" : "OFF";
 }
 
 
@@ -152,7 +152,7 @@ void pushStat()
     // socket_server.send
     String st;
     mkStat( st );
-    DEBUG_PRINT("STATUS: msg len:%u\n---------------------------\n%s\n--------------------------\n", st.length(), st.c_str());
+    _DEBUG_PRINT("STATUS: msg len:%u\n---------------------------\n%s\n--------------------------\n", st.length(), st.c_str());
     socket_server.broadcastTXT(st.c_str(), st.length());
 }
 
@@ -250,7 +250,7 @@ void loop()
       pushStat();
       if (g_pow)  DEBUG_PRINT("LED: %s  Relay: %s EMstate: %s\n", state2txt(g_pow->ledState ), state2txt( g_pow->relayState), g_pow->online ? "ONLINE" : "OFFLINE"  );
     
-      DEBUG_PRINT("OLED:\n%s\n", buffer );
+      DEBUG_PRINT("%s\n", buffer );
     }
 
     if (g_pow) g_pow->loop();

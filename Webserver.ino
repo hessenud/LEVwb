@@ -51,12 +51,13 @@ void setupWebSrv()
 
         http_server.on("/",     HTTP_GET, []() { handleFileRead("/main.html"); });
 
-        http_server.on("/on",   HTTP_GET, []() { g_pow->setPwr(true);  handleStat(); });
-        http_server.on("/off",  HTTP_GET, []() { g_pow->setPwr(false); handleStat(); });
+        http_server.on("/on",   HTTP_GET, []() { g_pow->setRelay(true);  handleStat(); });
+        http_server.on("/off",  HTTP_GET, []() { g_pow->setRelay(false); handleStat(); });
 
         http_server.on("/pwr", HTTP_GET,        mkDelegate( g_pow, handlePwrReq) ); 
         http_server.on("/calibrate", HTTP_GET,  mkDelegate( g_pow, handleCalReq) ); 
         http_server.on("/energy", HTTP_GET,     mkDelegate( g_pow, handleEnergyReq));
+        http_server.on("/simplerq", HTTP_GET,     mkDelegate( g_pow, handleSimpleReq));
         http_server.on("/timer", HTTP_GET,      mkDelegate( g_pow, handleTimeReq));
 
         http_server.on("/stat",       HTTP_GET, handleStat );
@@ -155,9 +156,9 @@ void handleCtl() {
         //float value = atof( p1Val.c_str() );
         DEBUG_PRINT("CTL p%dName: %s  val: %s\n", n, pName.c_str(), pVal.c_str() );
         if (pName == String("on")) {
-            g_pow->setPwr(true);
+            g_pow->setRelay(true);
         } else if (pName == String("off")) {
-            g_pow->setPwr(false);
+            g_pow->setRelay(false);
         } else if (pName == String("togOnline")) {
           if ( g_pow->online ) {
               g_pow->online = false;
@@ -171,14 +172,16 @@ void handleCtl() {
             if (pVal == "std"){
                 requestProfile( 0 );
             } else if (pVal == "qck"){
+                // quickcharge: Profile QCK, forcibly on and OFFLINE, don't let SHM control POW
                 requestProfile( 1 );
-                g_pow->setPwr(true);
+                g_pow->setRelay(true);
+                g_semp->acceptEMSignal( (g_pow->online = false) );
             } else if (pVal == "del"){
                 g_semp->resetPlan(-1); // reset active Plan
-                g_pow->setPwr(false);
+                g_pow->endOfPlan();
             } else if (pVal == "delAll"){
                 g_semp->deleteAllPlans();
-                g_pow->setPwr(false);
+                g_pow->endOfPlan();
             } else {
                 requestProfile( atoi(pVal.c_str())  );
             }

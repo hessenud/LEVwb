@@ -61,14 +61,14 @@ public:
 
 
 
-#define storePref( __prf )  cfg[ #__prf ]= g_prefs.__prf 
-#define _loadPref( __prf )     g_prefs.__prf=((cfg[ #__prf ]))
-#define _loadPrefStr( __prf )  replaceString(((char**)&g_prefs.__prf), cfg[ #__prf ])
-#define loadPref( __prf, __def )     g_prefs.__prf=((cfg[ #__prf ]) | __def)
-#define loadPrefStr( __prf, __def )  replaceString(((char**)&g_prefs.__prf),  cfg[ #__prf ] | __def)
+#define storePref( __prf, __src )  cfg[ #__prf ]= __src.__prf
+#define _loadPref( __prf, __src )     __src.__prf=((cfg[ #__prf ]))
+#define _loadPrefStr( __prf, __src )  replaceString(((char**)&__src.__prf), cfg[ #__prf ])
+#define loadPref( __prf, __def, __src )     __src.__prf=((cfg[ #__prf ]) | __def)
+#define loadPrefStr( __prf, __def, __src )  replaceString(((char**)&__src.__prf),  cfg[ #__prf ] | __def)
 
-#define loadProfileXMember(__s, __idx, __member )    g_prefs.__s[__idx].__member = cfg[ #__s ][__idx][ #__member ]
-#define storeProfileXMember(__s, __idx, __member )    cfg[ #__s ][__idx][ #__member ] = g_prefs.__s[__idx].__member 
+#define loadProfileXMember(__s, __idx, __src, __member )    __src.__s[__idx].__member = cfg[ #__s ][__idx][ #__member ]
+#define storeProfileXMember(__s, __idx, __src, __member )    cfg[ #__s ][__idx][ #__member ] = __src.__s[__idx].__member
     
 
 #endif /* PREFS_H_ */
