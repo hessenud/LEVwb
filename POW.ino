@@ -665,7 +665,7 @@ void POW::loop()
         case  AD_RQ_ACTIVE:
             DBG_ASSERT( activePlan );
             // prolong active Plan if job not completed
-            if ( activePlan && (activePlan->end() - _now < g_prefs.ad_prolong_inc) ) {
+            if ( activePlan && (activePlan->end() - _now < g_prefs.ad_off_time) ) {
                 DEBUG_PRINT("prolong Timeframe\n");
                 activePlan->updateEnergy(  _now, relayState, 0, 0,  g_prefs.ad_prolong_inc);
             }
