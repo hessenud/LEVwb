@@ -12,6 +12,7 @@
 	<span class="title"><label id="device_name">LEVwb</label> Control</span>
 	<br>
 	<div class="directCtl">
+		<button id="tfReq" onclick="request('std')">Rq</button>
 		<button id="On" onclick="switchCtl(1)">ON</button>
 		<button id="Off" onclick="switchCtl(0)">OFF</button>
 		<span>
@@ -56,7 +57,7 @@
 </body>
 <script>
 	function doRequest(url, upd) {
-		// var pref = "http://192.168.178.35/"; url = pref + url;
+		//var pref = "http://192.168.178.35/"; url = pref + url;
 		fetch(url, {mode: 'no-cors'} )
 		  .then(function(response) {
 			  return response.json();
@@ -91,6 +92,11 @@
           + "&optional=" + opt
           + "&start=" + ((est_d=="undefined") ? 0 : est_d )
           + ( let ? ("&endTime=" + let) : ("&end=" + let_d));
+      doRequest( rq) ;
+  } 
+  
+  function request(par) {
+    var rq =  "simplerq?" + par;
       doRequest( rq) ;
   }
 

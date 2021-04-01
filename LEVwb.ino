@@ -165,13 +165,13 @@ void setup() {
     ///////////////////////////////
     // SEMP init
     snprintf_P( ChipID, sizeof(ChipID), PSTR("%08x"), ESP.getChipId() );
-    snprintf_P( udn_uuid, sizeof(udn_uuid), PSTR("f1d67bee-2a4e-d608-ffff-affe%08x"), ESP.getChipId() );
-    snprintf_P( DeviceID , sizeof(DeviceID), PSTR("F-05161968-0000%08x-00"), ESP.getChipId() );
+    snprintf_P( udn_uuid, sizeof(udn_uuid), PSTR("05161968-2a4e-d608-ffff-affa%08x"), ESP.getChipId() );
+    snprintf_P( DeviceID , sizeof(DeviceID), PSTR("F-05161968-%04u%08x-00"),g_prefs.serialNr, ESP.getChipId() );
     snprintf_P( DeviceSerial , sizeof(DeviceSerial), PSTR("%04d"), g_prefs.serialNr );
     //Serial.printf_P(PSTR("ChipID: %s\n"), ChipID);
 
 
-    g_semp = new uSEMP( udn_uuid, DeviceID, g_prefs.device_name, DeviceSerial, uSEMP::devTypeStr(g_prefs.devType), Vendor, g_prefs.maxPwr, &semp_server, SEMP_PORT );
+    g_semp = new uSEMP( udn_uuid, DeviceID, g_prefs.device_name, DeviceSerial, uSEMP::devTypeStr(g_prefs.devType), Vendor, g_prefs.maxPwr, g_prefs.intr, true, &semp_server, SEMP_PORT );
     g_pow = newPOW( g_prefs.modelVariant, g_semp );
     g_semp->setCallbacks( getTime
             ,([]( EM_state_t ems) {  g_pow->rxEmState(ems);  })
