@@ -184,7 +184,7 @@ void setup() {
     setupOLED();
     setupWIFI();
 
-    setupTimeClk( TIMEZONE );
+    setupTimeClk( g_prefs.timezone );
 
     setupIO();
     setupWebSrv();

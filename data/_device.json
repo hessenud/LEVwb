@@ -6,5 +6,6 @@
   "serialNr": 999,
   "modelVariant": 0,
   "maxPwr": 2300,
-  "use_oled": true
+  "use_oled": true,
+  "timezone": 200
 }

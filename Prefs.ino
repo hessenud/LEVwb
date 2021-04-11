@@ -119,6 +119,7 @@ void saveDevice()
     storePref(  modelVariant, g_prefs);
     storePref(  maxPwr, g_prefs );
     storePref(  use_oled, g_prefs );
+    storePref(  timezone, g_prefs );
 
     // Serialize JSON to file
     File file = fileSystem->open(DEVICE_FILE, "w+");
@@ -150,7 +151,7 @@ void loadDevice()
 
         loadPref(     maxPwr, MAX_CONSUMPTION, g_prefs );
         _loadPref(     use_oled, g_prefs );
-
+        loadPref(  timezone, 200, g_prefs );
     }
 
     file.close();

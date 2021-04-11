@@ -503,7 +503,7 @@ ad_event_t POW::autoDetect() {
 
     unsigned long        _now = getTime();
 
-    if ( (online || g_gsi) && g_prefs.autoDetect ) {
+    if ( (online) && g_prefs.autoDetect ) {
         DEBUG_PRINT(" autoDetect state: %d   PWR: %u   dt=%lu\n", m_ad_state, activePwr, (_now- m_ad_start) );
         switch ( m_ad_state ) {
         case AD_OFF:
@@ -665,7 +665,7 @@ void POW::loop()
         case  AD_RQ_ACTIVE:
             DBG_ASSERT( activePlan );
             // prolong active Plan if job not completed
-            if ( activePlan && (activePlan->end() - _now < g_prefs.ad_off_time) ) {
+            if ( activePlan && ((activePlan->end() - _now) < g_prefs.ad_off_time) ) {
                 DEBUG_PRINT("prolong Timeframe\n");
                 activePlan->updateEnergy(  _now, relayState, 0, 0,  g_prefs.ad_prolong_inc);
             }

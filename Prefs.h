@@ -47,7 +47,7 @@ public:
     unsigned    ad_off_threshold;   ///< lower active power in [W] threshold for detection of END or active job/energy need
     unsigned    ad_off_time;        ///< if active power stays below lower threshold for xxx[s] the running job is considered finished
     unsigned    ad_prolong_inc;     ///< increment in[s] to prolong a running request to let device finish the job
-    
+    unsigned    timezone;           ///< tz in 100/th hour
 
     PowProfile  powProfile[N_POW_PROFILES];
     
