@@ -98,7 +98,7 @@ void POW::calibrate(    double expectedVoltage, double expectedPwr, double expec
 
 unsigned POW::calcOnTime( unsigned requestedEnergy, unsigned avr_pwr)
 {
-    return (Wh2Ws(requestedEnergy) / avr_pwr) // OnTime is in seconds => Wh2Ws
+    return (Wh2Ws(requestedEnergy) / (avr_pwr?avr_pwr:1)) // OnTime is in seconds => Wh2Ws
             +180; // + 3 Minutes to give SEMP EM a bit time for planning an control
 }
 
@@ -465,7 +465,7 @@ void POW::procAdRequest()
     // this can be handled more intelligently... but after brewing over this, i decided it would not be worth the effort
 
 
-    PowProfile powPrf = findTimeFrame( PowProfile::TIMF, Wh2Ws(g_prefs.defCharge)/g_prefs.assumed_power );
+    PowProfile powPrf = findTimeFrame( PowProfile::TIMF, Wh2Ws(g_prefs.defCharge)/( g_prefs.assumed_power ? g_prefs.assumed_power :1));
     if ( powPrf.valid ) {
         DEBUG_PRINT(" matching timeframe:" ); dump_profile( powPrf );
         m_semp->deleteAllPlans(); 
@@ -476,7 +476,7 @@ void POW::procAdRequest()
         if ( powPrf.timeframe ) {
             DEBUG_PRINT(" modifyPlanTime(0,...)\n" );
             unsigned dayoffset = _now - (_now%(1 DAY));
-            unsigned required = Wh2Ws(g_prefs.defCharge)/g_prefs.assumed_power;
+            unsigned required = Wh2Ws(g_prefs.defCharge)/( g_prefs.assumed_power ? g_prefs.assumed_power :1);
             //if ( powPrf.est + dayoffset < _now ) dayoffset  += 1 Day; 
             //if ( powPrf.let + dayoffset < _now ) powPrf.let += 1 Day;
             m_semp->modifyPlanTime(0, _now, required,  powPrf.opt,  powPrf.est + dayoffset, powPrf.let + dayoffset );

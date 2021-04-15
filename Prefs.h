@@ -40,6 +40,7 @@ public:
     unsigned    devType;            ///< SEMP defined device Type   uSEMP::devTypeStr( typeId );
     unsigned    maxPwr;             ///< SEMp Maximum Power -> assumed Power
     bool        intr;               ///< SEMP interrupible
+    bool        optionalEnergy;     ///< SEMP deive accepts optional energy
     unsigned    defCharge;          ///< default charge energy // reqested ON time
     bool        autoDetect;         ///< autodetect energy need
     unsigned    ad_on_threshold;    ///< active power in [W] threshold for detection of energy need/start of a job
@@ -48,6 +49,9 @@ public:
     unsigned    ad_off_time;        ///< if active power stays below lower threshold for xxx[s] the running job is considered finished
     unsigned    ad_prolong_inc;     ///< increment in[s] to prolong a running request to let device finish the job
     unsigned    timezone;           ///< tz in 100/th hour
+    bool        absTimestamp;       ///< Timestamp is true=>absolute or false=>relative
+
+
 
     PowProfile  powProfile[N_POW_PROFILES];
     

@@ -23,7 +23,9 @@ Prefs::Prefs()
     serialNr=0; 
     updateTime=0; 
     modelVariant=0; 
-
+    absTimestamp=false;
+    optionalEnergy=false;
+    timezone = 0;
 
     devType=12; 
     maxPwr=0; 
@@ -31,9 +33,6 @@ Prefs::Prefs()
     use_oled = false;
     defCharge=0; 
 
-    //    for(unsigned n=0; n < N_POW_PROFILES; ++n ) {
-    //      g_prefs.powProfile[n] = PowProfile( PowProfile::NRGY,  PowProfile::ToD,  PowProfile::IDLE,  PowProfile::ONCE,  0,0, 0, 0);
-    //    };
 }
 
 
@@ -120,6 +119,7 @@ void saveDevice()
     storePref(  maxPwr, g_prefs );
     storePref(  use_oled, g_prefs );
     storePref(  timezone, g_prefs );
+    storePref(  absTimestamp, g_prefs );
 
     // Serialize JSON to file
     File file = fileSystem->open(DEVICE_FILE, "w+");
@@ -152,6 +152,7 @@ void loadDevice()
         loadPref(     maxPwr, MAX_CONSUMPTION, g_prefs );
         _loadPref(     use_oled, g_prefs );
         loadPref(  timezone, 200, g_prefs );
+        loadPref(  absTimestamp, false, g_prefs );
     }
 
     file.close();
@@ -172,6 +173,7 @@ void saveParams()
 
     storePref(  devType, g_prefs );
     storePref(  intr, g_prefs   );
+    storePref( optionalEnergy, g_prefs   );
     storePref(  defCharge, g_prefs );
 
     storePref( autoDetect, g_prefs );
@@ -209,6 +211,7 @@ void loadParams()
         
         loadPref(     devType,  uSEMP::Other, g_prefs);
         _loadPref(     intr  , g_prefs );
+        _loadPref( optionalEnergy, g_prefs );
         loadPref(     defCharge, 2000, g_prefs );
         _loadPref(     autoDetect, g_prefs);
         loadPref(  ad_on_threshold, 0, g_prefs);
@@ -394,6 +397,7 @@ void loadPrefs()
 
     } 
     g_prefs.loaded = true;
+ 
 }
 
 void savePrefs() {

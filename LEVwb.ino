@@ -9,7 +9,7 @@
 #define DEBUG_SUPPORT
 
 #ifdef DEBUG_SUPPORT
-# define USE_LIB_WEBSOCKET true
+# define USE_LIB_WEBSOCKET true 
 # include "RemoteDebug.h"        //https://github.com/JoaoLopesF/RemoteDebug
 RemoteDebug Debug;
 # define DEBUG_PRINT(...) Debug.printf(__VA_ARGS__)
@@ -171,7 +171,9 @@ void setup() {
     //Serial.printf_P(PSTR("ChipID: %s\n"), ChipID);
 
 
-    g_semp = new uSEMP( udn_uuid, DeviceID, g_prefs.device_name, DeviceSerial, uSEMP::devTypeStr(g_prefs.devType), Vendor, g_prefs.maxPwr, g_prefs.intr, true, &semp_server, SEMP_PORT );
+    g_semp = new uSEMP( udn_uuid, DeviceID, g_prefs.device_name, DeviceSerial, uSEMP::devTypeStr(g_prefs.devType), Vendor, g_prefs.maxPwr
+    , g_prefs.intr, g_prefs.optionalEnergy ,g_prefs.absTimestamp , 
+    &semp_server, SEMP_PORT );
     g_pow = newPOW( g_prefs.modelVariant, g_semp );
     g_semp->setCallbacks( getTime
             ,([]( EM_state_t ems) {  g_pow->rxEmState(ems);  })
@@ -199,6 +201,11 @@ void setup() {
 
     // requestDailyPlan(false);
     pushStat();
+
+       // boot counter
+    File file = fileSystem->open("__log.txt", "a+");
+    file.printf( "%s:>  boot\n", TimeClk::getTimeString( getTime()) );
+    file.close();
 }
 
 

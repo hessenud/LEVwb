@@ -7,5 +7,6 @@
   "modelVariant": 0,
   "maxPwr": 2300,
   "use_oled": true,
-  "timezone": 200
+  "timezone": 200,
+  "absTimestamp": false
 }
