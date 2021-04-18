@@ -127,7 +127,27 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 
 ////////////////////////////////////////////////////////
+class uLog {
+  FS* m_fs;
+  const char* m_logFn;
+  unsigned long (*m_getTime)();
+  
+  public:
+  uLog(FS* i_fs, const char* i_logFn, unsigned long (*i_getTime)()):m_fs(i_fs),m_logFn(i_logFn), m_getTime(i_getTime) {
+  }
 
+  void log(const char* txt);
+  void log(String& txt) {
+    log ( txt.c_str() );
+  }
+};
+
+void uLog::log(const char* txt) {
+   unsigned long  _now = m_getTime();
+   File file = m_fs->open( m_logFn, "a+");
+   file.printf( "%s %s:>  %s\n",TimeClk::getDateString( _now ), TimeClk::getTimeString( _now ), txt );
+   file.close();
+}
 
 
 const char* state2txt( int state)
@@ -145,7 +165,7 @@ void pushStat()
     socket_server.broadcastTXT(st.c_str(), st.length());
 }
 
-
+uLog* myLog;
 
 void setup() {
     Serial.begin(115200);
@@ -165,8 +185,8 @@ void setup() {
     ///////////////////////////////
     // SEMP init
     snprintf_P( ChipID, sizeof(ChipID), PSTR("%08x"), ESP.getChipId() );
-    snprintf_P( udn_uuid, sizeof(udn_uuid), PSTR("05161968-2a4e-d608-ffff-affa%08x"), ESP.getChipId() );
-    snprintf_P( DeviceID , sizeof(DeviceID), PSTR("F-05161968-%04u%08x-00"),g_prefs.serialNr, ESP.getChipId() );
+    snprintf_P( udn_uuid, sizeof(udn_uuid), PSTR("05161968-2a4e-d608-ffff-affe%08x"), ESP.getChipId() );
+    snprintf_P( DeviceID , sizeof(DeviceID), PSTR("F-15161968-%04u%08x-00"),g_prefs.serialNr, ESP.getChipId() );
     snprintf_P( DeviceSerial , sizeof(DeviceSerial), PSTR("%04d"), g_prefs.serialNr );
     //Serial.printf_P(PSTR("ChipID: %s\n"), ChipID);
 
@@ -203,9 +223,8 @@ void setup() {
     pushStat();
 
        // boot counter
-    File file = fileSystem->open("__log.txt", "a+");
-    file.printf( "%s:>  boot\n", TimeClk::getTimeString( getTime()) );
-    file.close();
+    myLog = new uLog( fileSystem, "__log.txt", getTime );
+    myLog->log( "booted");
 }
 
 

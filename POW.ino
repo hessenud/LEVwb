@@ -403,6 +403,9 @@ PowProfile  POW::findTimeFrame( bool i_timf, unsigned i_req  )
         long     startTime;   // modified startTime
         long     endTime;     // modified endTime
     } candidate;
+    candidate.prfIdx = 0xdead;
+    candidate.startTime = 0;
+    candidate.endTime=0;
     do {
         for( int idx = _idx, endIdx = _endIdx; idx < endIdx; ++idx )
         {
@@ -419,16 +422,18 @@ PowProfile  POW::findTimeFrame( bool i_timf, unsigned i_req  )
                 unsigned long startTime = prf.est + ( prf.timeOfDay ? (_dayoffset + dT)  : _now); // relative timeframes are always in the future
                 unsigned long endTime   =  prf.let + ( prf.timeOfDay ? (_dayoffset + dT)  : _now);
                 if (startTime < _now) startTime = _now+extraStartTime; //  if timeframe has already startet, give EM some extra time for start and try
-                long tfLength = (startTime - endTime);
-                if ( (endTime > startTime) && (tfLength >= i_req) ) {
-                    DEBUG_PRINT("\t\t possible candidate absolute daytime %d:\n", idx); dump_profile( prf );
-                    if (!found || candidate.startTime > startTime)
+                long tfLength = (endTime - startTime);
+                if ( tfLength >= long(i_req) ) {
+                    DEBUG_PRINT("\t\t possible candidate absolute daytime %d:  i_req:%ds tfLength: %ds\n"
+                            , idx,i_req, tfLength);
+                    dump_profile( prf );
+                    if (!found || (startTime < candidate.startTime) )
                     {
                         candidate.prfIdx =  idx;
                         candidate.startTime = startTime;
                         candidate.endTime = endTime;
-                        DEBUG_PRINT("%s candidate: idx:%u :> %d-%s (%u / %u) -> %s (%u) \n\t", found ? "better" : "a", idx, dT
-                                , Tstr(TimeClk::getTimeString(candidate.startTime)), candidate.startTime, prf.est
+                        DEBUG_PRINT("%s candidate: idx:%u :> %s (%u %s) -> %s (%u) \n\t", found ? "better" : "a", idx
+                                , Tstr(TimeClk::getTimeString(candidate.startTime)), candidate.startTime, dT>0?"+1d":""
                                 , Tstr(TimeClk::getTimeString(candidate.endTime)), candidate.endTime );
                         found = true;
                     }    
@@ -656,17 +661,19 @@ void POW::loop()
         };
         DEBUG_PRINT("AD state: %s(%d)\n", ads2txt[autoDetectState], autoDetectState );
         switch( autoDetectState) {
-        case  AD_REQUEST: procAdRequest(); break;
+        case  AD_REQUEST: procAdRequest(); 
+            break;
         case  AD_END_REQUEST:
             DEBUG_PRINT(" Autodetected  End of Energy Request\n");
+            myLog->log("Autodetected  End of Energy Request\n");
             m_semp->resetPlan(); 
             endOfPlan();
             break;
         case  AD_RQ_ACTIVE:
-            DBG_ASSERT( activePlan );
             // prolong active Plan if job not completed
             if ( activePlan && ((activePlan->end() - _now) < g_prefs.ad_off_time) ) {
                 DEBUG_PRINT("prolong Timeframe\n");
+                myLog->log("prolong Timeframe");
                 activePlan->updateEnergy(  _now, relayState, 0, 0,  g_prefs.ad_prolong_inc);
             }
             break;
@@ -722,7 +729,8 @@ void POW::rxEmState(EM_state_t i_em_state, unsigned /*i_recommendedPwr*/ )
 {
     if ( online ) {
         if(i_em_state != EM_OFFLINE) {
-            setRelay( i_em_state == EM_ON );
+          myLog->log((String("POW::rxEmState ") + String(i_em_state) ));
+          setRelay( i_em_state == EM_ON );
         }
     }
 }

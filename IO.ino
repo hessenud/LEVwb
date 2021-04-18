@@ -15,6 +15,7 @@ void handleAppEvt( AppEvt_t i_evt, void* i_par)
     case APP_EOR:
         //End of request or plan 
         DEBUG_PRINT("handleAppEvt:  END OF REQUEST %d par:%p\n", i_evt, i_par);
+        myLog->log("handleAppEvt:  END OF REQUEST");
         g_LED.reset();
         g_pow->online= true; // default is: resume control by EM if active request ends
         break;
@@ -22,6 +23,7 @@ void handleAppEvt( AppEvt_t i_evt, void* i_par)
         g_LED.set( 0x5f, 8, true);
         g_pow->online= true; // default is: resume control by EM if a new request is planned
         DEBUG_PRINT("handleAppEvt: NEW REQUEST gone ACTIVE%d par:%p\n", i_evt, i_par);
+        myLog->log("handleAppEvt:  NEW REQUEST gone ACTIVE");
         break;
     case APP_IDLE:
          //Serial.printf("handleAppEvt: IDLE %d par:%p\n", i_evt, i_par);
@@ -29,7 +31,6 @@ void handleAppEvt( AppEvt_t i_evt, void* i_par)
     default:
     //IDLE
        DEBUG_PRINT("handleAppEvt: UNKNOWN %d par:%p\n", i_evt, i_par);
-
     ;
   }
 }
