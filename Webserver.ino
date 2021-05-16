@@ -70,6 +70,9 @@ void setupWebSrv()
         http_server.on("/setTimer",   HTTP_GET, handleSetTimer );
 
         http_server.on("/reqDaily",  HTTP_GET, []() { dailyChores (false); replyOKWithMsg("Plans set");} );
+        http_server.on("/log",  HTTP_GET, []() { replyOKWithMsg( myLog->get() ); } );
+        http_server.on("/rlog",  HTTP_GET, []() { replyOKWithMsg( myLog->get(true) ); } );
+        http_server.on("/sync",  HTTP_GET, []() { myLog->sync(); replyOKWithMsg( "synced Log empty" ); } );
 
         http_server.on("/restart",    HTTP_GET, []() { 
             fileSystem->end();

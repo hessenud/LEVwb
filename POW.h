@@ -460,7 +460,7 @@ protected:
      * to the needs of the specific job at hand. Or a dryer that needs more time because humidity is too high...
      *
      */
-    void prolongActivePlan();
+    void prolongPlan( PlanningData* i_plan );
 
     typedef enum {
         AD_OFF,
@@ -544,7 +544,7 @@ public:
     /**
      * signal active plan is exhausted
      */
-    void endOfPlan();
+    void endOfPlan(bool i_force=false);
 
     void toggleRelay();
     void setLED(bool i_state );

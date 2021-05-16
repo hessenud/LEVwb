@@ -18,9 +18,8 @@ POW::POW( uSEMP* i_semp, AppCb_t i_appCb )
     m_last_update=millis();
 }  
 
-void POW::setup() {
-
-
+void POW::setup() 
+{
     loadCalibration(this);
     m_semp->startService();
 
@@ -454,10 +453,12 @@ PowProfile  POW::findTimeFrame( bool i_timf, unsigned i_req  )
             : PowProfile() ;
 }
 
-void POW::prolongActivePlan()
+void POW::prolongPlan( PlanningData* i_plan )
 {
-    DEBUG_PRINT(" prolongActivePlan  by %u\n", g_prefs.ad_prolong_inc);
-    m_semp->updateEnergy( getTime(),  0,  0, g_prefs.ad_prolong_inc );
+    DEBUG_PRINT(" prolongPlan  by %u\n", g_prefs.ad_prolong_inc);
+    myLog->reset( );
+    myLog->log(String("prolong Timeframe by") + g_prefs.ad_prolong_inc + "s", true );
+    i_plan->updateEnergy(  getTime(), relayState, 0, 0,  g_prefs.ad_prolong_inc);
 }
 
 void POW::procAdRequest()
@@ -503,12 +504,18 @@ ad_event_t POW::autoDetect() {
      * if AD_ON
      *      detect end of energy need by power falling below lower threshold for more than specified time
      *
+     * ON detection is based on activePwr to be as quick as possible.
+     *    Think of washing machines.. you don't want to have the clothes lying wet inside the drum for hours,
+     *    so it's better to detect the request before there is too much water in the drum.
+     * OFF detection based on activePwr will prevent the request from beeing ended if a machin does something like
+     *    tumbling the clothes in intervals to prevent knittering. The request will be prolonged until
+     *    you take the clothes out and or turn the machine off. This is intended
      */
 
 
     unsigned long        _now = getTime();
 
-    if ( (online) && g_prefs.autoDetect ) {
+    if ( g_prefs.autoDetect ) {
         DEBUG_PRINT(" autoDetect state: %d   PWR: %u   dt=%lu\n", m_ad_state, activePwr, (_now- m_ad_start) );
         switch ( m_ad_state ) {
         case AD_OFF:
@@ -546,6 +553,7 @@ ad_event_t POW::autoDetect() {
             ret = AD_RQ_ACTIVE;
             if ( relayState ) {
                 if ( activePwr < g_prefs.ad_off_threshold )  {
+                    // begin to test for OFF if average is below threshold
                     DEBUG_PRINT(" autoDetect state:AD_TEST_OFF  BELOW THRESHOLD  %lu(%u)\n", (_now- m_ad_start), g_prefs.ad_on_time );
 
                     if ((_now- m_ad_start)> g_prefs.ad_off_time)    {
@@ -591,7 +599,6 @@ void POW::loop()
         unsigned _now = getTime();     // world time
         unsigned requestedEnergy = 0;
         unsigned optionalEnergy  = 0;
-
         PlanningData* activePlan = m_semp->getActivePlan();
         if (activePlan){
             requestedEnergy = activePlan->m_requestedEnergy;
@@ -667,14 +674,12 @@ void POW::loop()
             DEBUG_PRINT(" Autodetected  End of Energy Request\n");
             myLog->log("Autodetected  End of Energy Request\n");
             m_semp->resetPlan(); 
-            endOfPlan();
+            endOfPlan(true);
             break;
         case  AD_RQ_ACTIVE:
             // prolong active Plan if job not completed
             if ( activePlan && ((activePlan->end() - _now) < g_prefs.ad_off_time) ) {
-                DEBUG_PRINT("prolong Timeframe\n");
-                myLog->log("prolong Timeframe");
-                activePlan->updateEnergy(  _now, relayState, 0, 0,  g_prefs.ad_prolong_inc);
+               prolongPlan(activePlan);
             }
             break;
         case  AD_IDLE:
@@ -729,24 +734,32 @@ void POW::rxEmState(EM_state_t i_em_state, unsigned /*i_recommendedPwr*/ )
 {
     if ( online ) {
         if(i_em_state != EM_OFFLINE) {
-          myLog->log((String("POW::rxEmState ") + String(i_em_state) ));
-          setRelay( i_em_state == EM_ON );
+          myLog->log((String("POW::rxEmState ") + (i_em_state==EM_ON ? "ON" : (i_em_state == EM_OFF ? "OFF" : "OFFLINE")) ));
+          if ( i_em_state == EM_ON ) {
+            setRelay(true);
+          } else {
+            if ( !g_prefs.intr ) setRelay(false);
+          }
         }
     }
 }
 
-void  POW::endOfPlan(  )
+void  POW::endOfPlan(bool i_force  )
 {
-    DEBUG_PRINT("End OF Plan!!\n");
-    setRelay( false ); ///< this will reflect EM state EM_OFF to semp object
-    if(m_applicationCB) m_applicationCB( APP_EOR, 0);
-    resetAutoDetectionState();
-    m_semp->acceptEMSignal( (online = true) );
+  // some self -defense against unwanted termination by EM  
+    if ( (online && ( m_ad_state == AD_OFF)) || i_force ) {
+        DEBUG_PRINT("End OF Plan!!\n");
+        online = true; // if plan is forcedly terminated then go online again
+        setRelay( false ); ///< this will reflect EM state EM_OFF to semp object
+        if(m_applicationCB) m_applicationCB( APP_EOR, 0);
+        resetAutoDetectionState();
+        m_semp->acceptEMSignal( (online = true) );
+    }
 }
 
 void POW::setLED(bool i_state )
 {
-    if (ledState != i_state ) digitalWrite(m_ledPin, m_ledLogic ^(m_ledState = i_state) );
+    if ( ledState != i_state ) digitalWrite(m_ledPin, m_ledLogic ^(m_ledState = i_state) );
 }
 
 void POW::toggleRelay()

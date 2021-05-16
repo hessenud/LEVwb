@@ -47,6 +47,130 @@ RemoteDebug Debug;
 
 #include "Prefs.h"
 
+//-------------------------------------------------------------------
+//-- uLog -----------------------------------------------------------
+//-------------------------------------------------------------------
+
+class uLog {
+    static const unsigned cBuffSize = 0x1000;
+  FS* m_fs;
+  const char* m_logFn;
+  unsigned long (*m_getTime)();
+
+  char m_logBuffer[cBuffSize +1];
+  unsigned m_wp;
+  unsigned m_rp;
+
+  unsigned used() {
+      return  (m_wp > m_rp) ?  (m_wp-m_rp) : ((m_wp == m_rp) ? 0 : (cBuffSize+m_wp-m_rp));
+  }
+
+  unsigned avail() {
+      return cBuffSize - used();
+  }
+
+  public:
+  uLog(FS* i_fs, const char* i_logFn, unsigned long (*i_getTime)()):m_fs(i_fs),m_logFn(i_logFn), m_getTime(i_getTime), m_wp(0), m_rp(0) {
+  }
+
+  void reset() { m_rp = m_wp; }
+  
+  int write(const char* txt, unsigned i_len);
+
+  void log(String& txt, bool i_sync=false) {
+    log ( txt.c_str(), i_sync );
+  }
+
+  void _log(const char* txt);
+
+  void log(const char* txt, bool i_sync=false);
+  void sync();
+
+  String get(bool i_flush=false);
+};
+
+
+int uLog::write(const char* txt, unsigned i_len) {
+    int nBytes = i_len;
+    while (( nBytes > 0) && ( avail() ) ) {
+        int nMaxBytes = m_wp < m_rp ? m_rp - m_wp : cBuffSize+1 - m_wp; // Terminating NULL is appended to cBuffSize
+        unsigned wrBytes = snprintf( &m_logBuffer[m_wp], nMaxBytes , "%s" , txt );
+        if ( wrBytes >= nMaxBytes ) wrBytes = nMaxBytes-1;
+        m_wp += wrBytes;
+        m_logBuffer[m_wp]= 0;
+        txt += wrBytes;
+        nBytes -= wrBytes;
+        if ( m_wp >= cBuffSize ) m_wp = 0;
+    }
+    return nBytes;
+}
+
+
+
+
+void uLog::_log(const char* txt) {
+     write( txt, strlen(txt) );
+}
+
+void uLog::log(const char* txt, bool i_sync) {
+    unsigned long  _now = m_getTime();
+    write("\n",1);
+    const char* tms = TimeClk::getDateString( _now ); write( tms, strlen(tms) );
+    write(" ",1);
+    tms = TimeClk::getTimeString( _now );   write( tms, strlen(tms) );
+    write(":> ",3);
+
+    write( txt, strlen(txt) );
+    if ( i_sync ) sync();
+}
+
+String uLog::get(bool i_flush) {
+  String ret;
+  unsigned nBytes = m_wp - m_rp;
+  unsigned rp = m_rp;
+  if ( nBytes ) {
+      File file = m_fs->open( m_logFn, "a+");
+      while (  m_wp != rp ) {
+           if ( m_wp > rp ) {
+               ret += &m_logBuffer[rp];
+               rp = m_wp;
+           } else {
+               // first slice to end of Ringbuff
+              // ret += "::::>";
+               m_logBuffer[cBuffSize] = 0;
+               ret += &m_logBuffer[rp];
+               rp = 0;
+               //ret += "<::::>";
+           }
+      }
+  }
+  if ( i_flush ) m_rp = rp;
+  return ret;
+}
+
+
+void uLog::sync() {
+   unsigned nBytes = m_wp - m_rp;
+
+   if ( nBytes ) {
+       File file = m_fs->open( m_logFn, "a+");
+       while (  m_wp != m_rp ) {
+            if ( m_wp > m_rp ) {
+                nBytes = m_wp - m_rp;
+            } else {
+                // first slice to end of Ringbuffer
+                nBytes = cBuffSize - m_rp;
+            }
+            m_rp += file.write( &m_logBuffer[m_rp], nBytes );
+            if ( m_rp >= cBuffSize ) m_rp = 0;
+       }
+       file.close();
+   }
+}
+/////------------------------------------------------------
+
+
+
 const char* fsName = "LittleFS";
 FS* fileSystem = &LittleFS;
 LittleFSConfig fileSystemConfig = LittleFSConfig();
@@ -126,28 +250,6 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #endif
 
 
-////////////////////////////////////////////////////////
-class uLog {
-  FS* m_fs;
-  const char* m_logFn;
-  unsigned long (*m_getTime)();
-  
-  public:
-  uLog(FS* i_fs, const char* i_logFn, unsigned long (*i_getTime)()):m_fs(i_fs),m_logFn(i_logFn), m_getTime(i_getTime) {
-  }
-
-  void log(const char* txt);
-  void log(String& txt) {
-    log ( txt.c_str() );
-  }
-};
-
-void uLog::log(const char* txt) {
-   unsigned long  _now = m_getTime();
-   File file = m_fs->open( m_logFn, "a+");
-   file.printf( "%s %s:>  %s\n",TimeClk::getDateString( _now ), TimeClk::getTimeString( _now ), txt );
-   file.close();
-}
 
 
 const char* state2txt( int state)
@@ -191,9 +293,10 @@ void setup() {
     //Serial.printf_P(PSTR("ChipID: %s\n"), ChipID);
 
 
-    g_semp = new uSEMP( udn_uuid, DeviceID, g_prefs.device_name, DeviceSerial, uSEMP::devTypeStr(g_prefs.devType), Vendor, g_prefs.maxPwr
-    , g_prefs.intr, g_prefs.optionalEnergy ,g_prefs.absTimestamp , 
-    &semp_server, SEMP_PORT );
+    g_semp = new uSEMP( udn_uuid, DeviceID, g_prefs.device_name, DeviceSerial, uSEMP::devTypeStr(g_prefs.devType), Vendor
+            , g_prefs.maxPwr
+            , g_prefs.intr, g_prefs.optionalEnergy ,g_prefs.absTimestamp
+            , &semp_server, SEMP_PORT );
     g_pow = newPOW( g_prefs.modelVariant, g_semp );
     g_semp->setCallbacks( getTime
             ,([]( EM_state_t ems) {  g_pow->rxEmState(ems);  })
@@ -224,7 +327,7 @@ void setup() {
 
        // boot counter
     myLog = new uLog( fileSystem, "__log.txt", getTime );
-    myLog->log( "booted");
+    myLog->log( "booted", true );
 }
 
 
@@ -265,7 +368,10 @@ void loop()
       pushStat();
       if (g_pow)  DEBUG_PRINT("LED: %s  Relay: %s EMstate: %s\n", state2txt(g_pow->ledState ), state2txt( g_pow->relayState), g_pow->online ? "ONLINE" : "OFFLINE"  );
     
-      DEBUG_PRINT("%s\n", buffer );
+      //DEBUG_PRINT("%s\n", buffer );
+      myLog->_log( buffer );
+      myLog->_log( "\n" );
+      //DEBUG_PRINT( "%s\n", myLog->get().c_str() );
     }
 
     if (g_pow) g_pow->loop();
