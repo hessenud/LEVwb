@@ -61,21 +61,21 @@ class uLog {
   unsigned m_wp;
   unsigned m_rp;
 
-  unsigned used() {
-      return  (m_wp > m_rp) ?  (m_wp-m_rp) : ((m_wp == m_rp) ? 0 : (cBuffSize+m_wp-m_rp));
-  }
-
-  unsigned avail() {
-      return cBuffSize - used();
-  }
 
   public:
   uLog(FS* i_fs, const char* i_logFn, unsigned long (*i_getTime)()):m_fs(i_fs),m_logFn(i_logFn), m_getTime(i_getTime), m_wp(0), m_rp(0) {
   }
 
-  void reset() { m_rp = m_wp; }
+  unsigned used() {
+      return  (m_wp > m_rp) ?  (m_wp-m_rp) : ((m_wp == m_rp) ? 0 : (cBuffSize+1+m_wp-m_rp));
+  }
+
+  unsigned avail() {
+      return cBuffSize - used();
+  }
+  void flush() { m_rp = m_wp; }
   
-  int write(const char* txt, unsigned i_len);
+  unsigned write(const char* txt, unsigned i_len);
 
   void log(String& txt, bool i_sync=false) {
     log ( txt.c_str(), i_sync );
@@ -90,19 +90,41 @@ class uLog {
 };
 
 
-int uLog::write(const char* txt, unsigned i_len) {
-    int nBytes = i_len;
-    while (( nBytes > 0) && ( avail() ) ) {
-        int nMaxBytes = m_wp < m_rp ? m_rp - m_wp : cBuffSize+1 - m_wp; // Terminating NULL is appended to cBuffSize
-        unsigned wrBytes = snprintf( &m_logBuffer[m_wp], nMaxBytes , "%s" , txt );
-        if ( wrBytes >= nMaxBytes ) wrBytes = nMaxBytes-1;
+unsigned uLog::write(const char* txt, unsigned i_len) {
+    unsigned nBytes = i_len;
+    unsigned bytesWritten = 0;
+    unsigned available = avail();
+    int      missing = i_len - available;
+    if ( missing > 0 ) {
+      m_rp += missing;
+      if ( m_rp >= cBuffSize) m_rp -= cBuffSize;
+      DEBUG_PRINT("***** Buffer exhausted!!! overwrite %d******\n" , missing );
+    }
+    while ((nBytes > 0) && ((available = avail()) > 0) ){
+        unsigned nMaxBytes = m_wp < m_rp ? m_rp-m_wp-1 : cBuffSize - m_wp; // Terminating NULL is appended to cBuffSize
+        if ( nMaxBytes > avail()) {
+              DEBUG_PRINT("OOOOPS--------------- nMaxBytes %u avail: %u nBytes: %u  wp:%u rp:%u\n",nMaxBytes, available, nBytes ,m_wp, m_rp );
+              nMaxBytes = avail();
+        } 
+        if ( nMaxBytes < nBytes ) {
+              DEBUG_PRINT("SLICING --------------- nMaxBytes %u avail: %u nBytes: %u  wp:%u rp:%u\n",nMaxBytes, available, nBytes ,m_wp, m_rp );
+        }
+        // todo use memcpy and copy w/o printing
+        #define min(a,b) ((a) <(b) ? (a):(b))
+        unsigned wrBytes = min( nMaxBytes , nBytes );
+        memcpy((void*) &m_logBuffer[m_wp], txt, wrBytes );
         m_wp += wrBytes;
+        bytesWritten += wrBytes;
         m_logBuffer[m_wp]= 0;
         txt += wrBytes;
         nBytes -= wrBytes;
-        if ( m_wp >= cBuffSize ) m_wp = 0;
+        //DEBUG_PRINT( "%s wrBytes %u  nMaxBytes %u avail: %u written%d\n", wrBytes > available ? "**************ASSERT***********\n": "" ,wrBytes,nMaxBytes , available, bytesWritten );
+        if ( m_wp >= cBuffSize ) {
+          // DEBUG_PRINT("*************wrap   wp:%u  max:%u\n", m_wp,cBuffSize );
+          m_wp = 0;
+        }
     }
-    return nBytes;
+    return bytesWritten;
 }
 
 
@@ -129,7 +151,6 @@ String uLog::get(bool i_flush) {
   unsigned nBytes = m_wp - m_rp;
   unsigned rp = m_rp;
   if ( nBytes ) {
-      File file = m_fs->open( m_logFn, "a+");
       while (  m_wp != rp ) {
            if ( m_wp > rp ) {
                ret += &m_logBuffer[rp];
@@ -368,10 +389,12 @@ void loop()
       pushStat();
       if (g_pow)  DEBUG_PRINT("LED: %s  Relay: %s EMstate: %s\n", state2txt(g_pow->ledState ), state2txt( g_pow->relayState), g_pow->online ? "ONLINE" : "OFFLINE"  );
     
-      //DEBUG_PRINT("%s\n", buffer );
-      myLog->_log( buffer );
-      myLog->_log( "\n" );
-      //DEBUG_PRINT( "%s\n", myLog->get().c_str() );
+      DEBUG_PRINT("%s\n", buffer );
+//      myLog->_log( buffer );
+//      myLog->_log( "available: ");
+//      myLog->_log( (String(myLog->avail()) + "\n").c_str());
+//      myLog->_log( "\n" );
+      // DEBUG_PRINT( "%s\n", myLog->get().c_str() );
     }
 
     if (g_pow) g_pow->loop();

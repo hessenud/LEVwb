@@ -182,10 +182,10 @@ void handleCtl() {
                 g_semp->acceptEMSignal( (g_pow->online = false) );
             } else if (pVal == "del"){
                 g_semp->resetPlan(-1); // reset active Plan
-                g_pow->endOfPlan();
+                g_pow->endOfPlan(true);
             } else if (pVal == "delAll"){
                 g_semp->deleteAllPlans();
-                g_pow->endOfPlan();
+                g_pow->endOfPlan(true);
             } else {
                 requestProfile( atoi(pVal.c_str())  );
             }

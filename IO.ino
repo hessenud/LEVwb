@@ -65,6 +65,7 @@ void buttonControl()
       case PushButton::CLICK:
           g_pow->toggleRelay();// relayState = !relayState;
           DEBUG_PRINT(" Relay: %s\n", g_pow->relayState ? "ON" :"OFF");
+          myLog->log(String(" Relay: ") +  g_pow->relayState ? "ON\n" :"OFF\n" );
           pushStat();
           g_LED.reset();
           break;
@@ -73,10 +74,12 @@ void buttonControl()
           g_semp->deleteAllPlans( );
           g_pow->resetAutoDetectionState();
           g_LED.reset();
+          myLog->log(String(" Reset all plans: ") +  (g_pow->relayState ? "ON\n" :"OFF\n"));
           break;
       case PushButton::DN_LONG2:
           g_Morse.set("factory default settings...");
-
+          myLog->log("factory default settings...\n");
+   
           break;
      case PushButton::DBLCLICK: 
           g_Morse.next("..  --  ", true );

@@ -321,8 +321,10 @@ void POW::handleSimReq()
         String p1Val = http_server.arg(n);
         //float value= atof( p1Val.c_str() );
         DEBUG_PRINT("p%dName: %s  val: %s\n",n, p1Name.c_str(), p1Val.c_str() );
-        if (p1Name == String("pwron"))         {  resp = "pwron";  setSimPwr( true );
-        } else if (p1Name == String("pwroff")) {  resp = "pwroff"; setSimPwr( false );
+        if (p1Name == String("pwron"))         {  resp = "pwron";  setSimPwr( true ); myLog->log("set SIM Pwr ON");
+       
+        } else if (p1Name == String("pwroff")) {  resp = "pwroff"; setSimPwr( false );  myLog->log("set SIM Pwr OFF");
+       
         } else if (p1Name == String("factor")) {  resp = "factor: " + p1Val;
         } else {
             replyNotFound( resp );
@@ -456,14 +458,14 @@ PowProfile  POW::findTimeFrame( bool i_timf, unsigned i_req  )
 void POW::prolongPlan( PlanningData* i_plan )
 {
     DEBUG_PRINT(" prolongPlan  by %u\n", g_prefs.ad_prolong_inc);
-    myLog->reset( );
-    myLog->log(String("prolong Timeframe by") + g_prefs.ad_prolong_inc + "s", true );
+    myLog->log(String("prolong Timeframe by") + g_prefs.ad_prolong_inc + "s\n" );
     i_plan->updateEnergy(  getTime(), relayState, 0, 0,  g_prefs.ad_prolong_inc);
 }
 
 void POW::procAdRequest()
 {
     DEBUG_PRINT(" Autodetected  Energy Request\n");
+    myLog->log("Autodetected  Energy Request\n");
     // a energy request might be pending at this point:
     // the EM Device was switched on while waiting on the EM and a job was programmed (e.g. washingmachine) and started
     // this is not the usual use-case, because normally a Energy request is EIHTER already planned OR created right now
@@ -542,6 +544,7 @@ ad_event_t POW::autoDetect() {
         case AD_ON:
             ret = AD_RQ_ACTIVE;
             if ( relayState ) {
+              myLog->log(String(" autoDetect state: ") + m_ad_state  + String("   PWR: ") + activePwr + ("  dt=") + (_now- m_ad_start)  );
                 if ( activePwr < g_prefs.ad_off_threshold )  {
                     DEBUG_PRINT(" autoDetect state:AD_ON  BELOW THRESHOLD  ==> AD_TEST_OFF\n" );
                     m_ad_state = AD_TEST_OFF;  m_ad_start = _now;
@@ -678,8 +681,16 @@ void POW::loop()
             break;
         case  AD_RQ_ACTIVE:
             // prolong active Plan if job not completed
-            if ( activePlan && ((activePlan->end() - _now) < g_prefs.ad_off_time) ) {
-               prolongPlan(activePlan);
+            if ( activePlan ) { 
+              if(((activePlan->end() - _now) < g_prefs.ad_off_time)
+                ||( activePlan->remaining() < g_prefs.ad_off_time)
+              )
+              {
+                 prolongPlan(activePlan);
+              }
+            } else {
+              myLog->log("resetAutoDetectionState <= no active plan\n");
+              resetAutoDetectionState();
             }
             break;
         case  AD_IDLE:
@@ -720,8 +731,8 @@ void POW::setRelay(bool i_state )
 {
     if ( relayState != i_state ) {
         digitalWrite( relayPin, m_relayLogic^(m_relayState = i_state) );
-        m_semp->setEmState( relayState ); // update/acknowledge state
     }
+    m_semp->setEmState( relayState ); // update/acknowledge state
 }
 
 
@@ -739,6 +750,7 @@ void POW::rxEmState(EM_state_t i_em_state, unsigned /*i_recommendedPwr*/ )
             setRelay(true);
           } else {
             if ( !g_prefs.intr ) setRelay(false);
+            else setRelay( relayState );
           }
         }
     }
