@@ -7,25 +7,34 @@
 #define xstr(xs) str(xs)
 
 #define DEBUG_SUPPORT
+#define _MAY_USE_SERIAL
 
 #ifdef DEBUG_SUPPORT
 # define USE_LIB_WEBSOCKET true 
 # include "RemoteDebug.h"        //https://github.com/JoaoLopesF/RemoteDebug
 RemoteDebug Debug;
-# define DEBUG_PRINT(...) Debug.printf(__VA_ARGS__)
+# ifdef MAY_USE_SERIAL
+#   define DEBUG_PRINT(...) Debug.printf(__VA_ARGS__);Serial.printf(__VA_ARGS__)
+# else
+#   define DEBUG_PRINT(...) Debug.printf(__VA_ARGS__);
+# endif
 #endif
 
 #ifndef DEBUG_PRINT
-# define DEBUG_PRINT(...)  Serial.printf(__VA_ARGS__)
+# ifdef MAY_USE_SERIAL
+#   define Debug Serial
+#   define DEBUG_PRINT(...)  Serial.printf(__VA_ARGS__)
+# else
+#   define Debug 0
+#   define DEBUG_PRINT(...)  
+# endif
 #endif
 
 
-# define DEV_IDX 2
-# define DEV_BASENAME "DevBoard"
-# define DEV_EXT " CHG"
-# define HOSTNAME "DEVPOW_" DEV_NR 
-
-
+#define DEV_IDX 2
+#define DEV_BASENAME "DevBoard"
+#define DEV_EXT " CHG"
+#define HOSTNAME "DEVPOW_2" DEV_NR 
 #define MQTTBROKER  "raspi"
 #define MQTTPORT    1883
 
@@ -38,7 +47,6 @@ RemoteDebug Debug;
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include <WiFiManager.h>
-
 
 #include <WebSocketsServer.h>
 //local modules include
@@ -77,7 +85,7 @@ class uLog {
   
   unsigned write(const char* txt, unsigned i_len);
 
-  void log(String& txt, bool i_sync=false) {
+  void log(String txt, bool i_sync=false) {
     log ( txt.c_str(), i_sync );
   }
 
@@ -102,13 +110,6 @@ unsigned uLog::write(const char* txt, unsigned i_len) {
     }
     while ((nBytes > 0) && ((available = avail()) > 0) ){
         unsigned nMaxBytes = m_wp < m_rp ? m_rp-m_wp-1 : cBuffSize - m_wp; // Terminating NULL is appended to cBuffSize
-        if ( nMaxBytes > avail()) {
-              DEBUG_PRINT("OOOOPS--------------- nMaxBytes %u avail: %u nBytes: %u  wp:%u rp:%u\n",nMaxBytes, available, nBytes ,m_wp, m_rp );
-              nMaxBytes = avail();
-        } 
-        if ( nMaxBytes < nBytes ) {
-              DEBUG_PRINT("SLICING --------------- nMaxBytes %u avail: %u nBytes: %u  wp:%u rp:%u\n",nMaxBytes, available, nBytes ,m_wp, m_rp );
-        }
         // todo use memcpy and copy w/o printing
         #define min(a,b) ((a) <(b) ? (a):(b))
         unsigned wrBytes = min( nMaxBytes , nBytes );
@@ -118,26 +119,29 @@ unsigned uLog::write(const char* txt, unsigned i_len) {
         m_logBuffer[m_wp]= 0;
         txt += wrBytes;
         nBytes -= wrBytes;
-        //DEBUG_PRINT( "%s wrBytes %u  nMaxBytes %u avail: %u written%d\n", wrBytes > available ? "**************ASSERT***********\n": "" ,wrBytes,nMaxBytes , available, bytesWritten );
         if ( m_wp >= cBuffSize ) {
-          // DEBUG_PRINT("*************wrap   wp:%u  max:%u\n", m_wp,cBuffSize );
           m_wp = 0;
         }
     }
     return bytesWritten;
 }
 
-
-
-
 void uLog::_log(const char* txt) {
-     write( txt, strlen(txt) );
+  
+    DEBUG_PRINT("%s\n", txt);
+    write( txt, strlen(txt) );
 }
 
 void uLog::log(const char* txt, bool i_sync) {
+  
+    DEBUG_PRINT("%s\n", txt);
+    
     unsigned long  _now = m_getTime();
     write("\n",1);
-    const char* tms = TimeClk::getDateString( _now ); write( tms, strlen(tms) );
+    
+
+    const char* tms  = TimeClk::getDateString( _now ); 
+    write( tms, strlen(tms) );
     write(" ",1);
     tms = TimeClk::getTimeString( _now );   write( tms, strlen(tms) );
     write(":> ",3);
@@ -281,10 +285,12 @@ const char* state2txt( int state)
 
 void pushStat()
 {
+  DEBUG_PRINT("pushStat\n");
+    
     // socket_server.send
     String st;
     mkStat( st );
-    _DEBUG_PRINT("STATUS: msg len:%u\n---------------------------\n%s\n--------------------------\n", st.length(), st.c_str());
+    DEBUG_PRINT("STATUS: msg len:%u\n---------------------------\n%s\n--------------------------\n", st.length(), st.c_str());
     socket_server.broadcastTXT(st.c_str(), st.length());
 }
 
@@ -295,15 +301,28 @@ void setup() {
 
     ////////////////////////////////
     // FILESYSTEM INIT
+
+
     DEBUG_PRINT("Initializing filesystem...\n");
     fileSystemConfig.setAutoFormat(false);
     fileSystem->setConfig(fileSystemConfig);
+    fsOK = fileSystem->begin();
+    
     
     g_gsi = false;
-    fsOK = fileSystem->begin();
     DEBUG_PRINT(fsOK ? ("Filesystem initialized.\n") : ("Filesystem init failed!\n"));
-
+    // boot counter
+    myLog = new uLog( fileSystem, "__log.txt", getTime );
+    if(myLog) myLog->log( "booted", true );
+   
     loadPrefs();
+    setupWIFI();
+    updateWIFI();
+    setupDebug();
+    setupOTA();
+    
+    setupTimeClk( g_prefs.timezone );
+ 
 
     ///////////////////////////////
     // SEMP init
@@ -319,6 +338,7 @@ void setup() {
             , g_prefs.intr, g_prefs.optionalEnergy ,g_prefs.absTimestamp
             , &semp_server, SEMP_PORT );
     g_pow = newPOW( g_prefs.modelVariant, g_semp );
+
     g_semp->setCallbacks( getTime
             ,([]( EM_state_t ems) {  g_pow->rxEmState(ems);  })
             ,([]( ) {  g_pow->endOfPlan();  }));
@@ -327,28 +347,33 @@ void setup() {
     ///////////////////////////////
     // 
 
+        //Serial.printf("set OLED\n");
     setupOLED();
-    setupWIFI();
-
-    setupTimeClk( g_prefs.timezone );
-
+    
+        //Serial.printf("set IO\n");
     setupIO();
+    
+        //Serial.printf("set WEB\n");
     setupWebSrv();
 
 
+        //Serial.printf("set MQTT\n");
     if ( g_prefs.mqtt_broker_port )
         g_mqtt.setup(g_prefs.hostname,   g_prefs.mqtt_broker, g_prefs.mqtt_broker_port, g_pow );
 
-    setupDebug();
-    setupSSDP();
-    setupOTA();
 
+  
+        //Serial.printf("set SSDP\n");
+    setupSSDP();
+    
+ 
+
+        //Serial.printf("after set OTA\n");
     // requestDailyPlan(false);
+    
+        //Serial.printf("set PushStat\n");
     pushStat();
 
-       // boot counter
-    myLog = new uLog( fileSystem, "__log.txt", getTime );
-    myLog->log( "booted", true );
 }
 
 
@@ -378,7 +403,7 @@ void loop()
     }
     wp += sprintf_P(wp, PSTR("-------------------\n"));
     const char* days[] = {"Mo","Tu","We","Th","Fr","Sa","So" };
-    int day_of_week = ( (_now/(1 Day)) + 3) % 7; 
+    int day_of_week = ( (_now/(1 DAY)) + 3) % 7; 
     wp += sprintf_P(wp, PSTR("* %s %s *"), days[day_of_week],TimeClk::getTimeString( _now ) );
     draw( buffer );  
     if ( ( _now - ltime > 5  ) 
@@ -387,13 +412,13 @@ void loop()
       ltime = _now;
       g_lastRelay = g_pow->relayState;
       pushStat();
-      if (g_pow)  DEBUG_PRINT("LED: %s  Relay: %s EMstate: %s\n", state2txt(g_pow->ledState ), state2txt( g_pow->relayState), g_pow->online ? "ONLINE" : "OFFLINE"  );
+      if (g_pow)  DEBUG_PRINT("LED: %s  Relay: %s EMstate: %s\n", state2txt(g_pow->ledState ), state2txt( g_pow->relayState), g_pow->m_online ? "ONLINE" : "OFFLINE"  );
     
       DEBUG_PRINT("%s\n", buffer );
-//      myLog->_log( buffer );
-//      myLog->_log( "available: ");
-//      myLog->_log( (String(myLog->avail()) + "\n").c_str());
-//      myLog->_log( "\n" );
+//      if(myLog) myLog->_log( buffer );
+//      if(myLog) myLog->_log( "available: ");
+//      if(myLog) myLog->_log( (String(myLog->avail()) + "\n").c_str());
+//      if(myLog) myLog->_log( "\n" );
       // DEBUG_PRINT( "%s\n", myLog->get().c_str() );
     }
 

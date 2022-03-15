@@ -59,6 +59,8 @@ void setupWIFI() {
       return;
   }
 #endif
+
+#if 0
   //if you get here you have connected to the WiFi
   Serial.println("connected...yeey :)");
   String hostNameWifi = g_prefs.hostname;
@@ -68,8 +70,21 @@ void setupWIFI() {
       Serial.print("* MDNS responder started. Hostname -> ");
       Serial.println( g_prefs.hostname) ;
   }
+#endif
 }
+
+
+void updateWIFI()
+{
+  String hostNameWifi = g_prefs.hostname;
+  hostNameWifi.concat(".local");
+  WiFi.hostname(hostNameWifi);
  
+  if (MDNS.begin(g_prefs.hostname)) {
+      DEBUG_PRINT("* MDNS responder started. Hostname -> ");
+      DEBUG_PRINT( g_prefs.hostname) ;
+  }
+}
 
 
 //---------------------------------

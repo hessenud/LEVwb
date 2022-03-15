@@ -70,8 +70,8 @@ void setupWebSrv()
         http_server.on("/setTimer",   HTTP_GET, handleSetTimer );
 
         http_server.on("/reqDaily",  HTTP_GET, []() { dailyChores (false); replyOKWithMsg("Plans set");} );
-        http_server.on("/log",  HTTP_GET, []() { replyOKWithMsg( myLog->get() ); } );
-        http_server.on("/rlog",  HTTP_GET, []() { replyOKWithMsg( myLog->get(true) ); } );
+        http_server.on("/log",  HTTP_GET, []() { replyOKWithMsg( myLog ? myLog->get() : "no LOG" ); } );
+        http_server.on("/rlog",  HTTP_GET, []() { replyOKWithMsg(myLog ?  myLog->get(true) : "no LOG" ); } );
         http_server.on("/sync",  HTTP_GET, []() { myLog->sync(); replyOKWithMsg( "synced Log empty" ); } );
 
         http_server.on("/restart",    HTTP_GET, []() { 
@@ -164,12 +164,12 @@ void handleCtl() {
         } else if (pName == String("off")) {
             g_pow->setRelay(false);
         } else if (pName == String("togOnline")) {
-          if ( g_pow->online ) {
-              g_pow->online = false;
+          if ( g_pow->m_online ) {
+              g_pow->m_online = false;
           } else {
-            g_pow->online = true;
+            g_pow->m_online = true;
           }
-          g_semp->acceptEMSignal( g_pow->online );
+          g_semp->acceptEMSignal( g_pow->m_online );
           g_semp->setEmState( g_pow->relayState );
 
         } else if (pName == String("chrgProfile")) {
@@ -179,7 +179,7 @@ void handleCtl() {
                 // quickcharge: Profile QCK, forcibly on and OFFLINE, don't let SHM control POW
                 requestProfile( 1 );
                 g_pow->setRelay(true);
-                g_semp->acceptEMSignal( (g_pow->online = false) );
+                g_semp->acceptEMSignal( (g_pow->m_online = false) );
             } else if (pVal == "del"){
                 g_semp->resetPlan(-1); // reset active Plan
                 g_pow->endOfPlan(true);
@@ -199,7 +199,6 @@ void handleCtl() {
     pushStat();
 }
 
-#define value2timeStr( vs )   (snprintf_P( (vs##_s), sizeof(vs##_s), PSTR("%2lu:%02lu"), (((vs)  % 86400L) / 3600), (((vs)  % 3600) / 60) ), (vs##_s))
 
 void handleGetProfiles()
 {
@@ -321,9 +320,9 @@ void handleSetTimer()
         if (pName == String("timer"))           { tmr = value&N_TMR_PROFILES;
                 } else if (pName == String("sw_time"))      { sw_time  = TimeClk::timeStr2Value(pVal.c_str());
                 } else if (pName == String("interval"))     { interval   = value;
-                } else if (pName == String("armed"))        { armed   = pVal;
-                } else if (pName == String("switchmode"))   { mode   = pVal;
-                } else if (pName == String("everyday"))     { daily   = pVal;
+                } else if (pName == String("armed"))        { armed   = value;
+                } else if (pName == String("switchmode"))   { mode    = value;
+                } else if (pName == String("everyday"))     { daily   = value;
                 } else {
                 }
     }
@@ -413,7 +412,8 @@ void requestProfile(unsigned i_profile)
     g_semp->modifyPlan(0, _now, prof.req, prof.opt, est, let );
 }
 
-void mkStat( String& resp) {
+void mkStat( String& resp )
+{
     PlanningData* activePlan = g_semp->getActivePlan(); 
     StaticJsonDocument<512> stat;
     stat["device_name"] = g_prefs.device_name;
@@ -429,7 +429,7 @@ void mkStat( String& resp) {
     stat["pwrFactor"]   = g_pow->pwrFactor;
 
     
-    stat["online"]      =  g_pow->online ? "online" : "offline";
+    stat["online"]      =  g_pow->m_online ? "online" : "offline";
     unsigned  req_chg = 0;
     long let =  0;
     if ( activePlan ) {

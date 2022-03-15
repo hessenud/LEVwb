@@ -60,19 +60,31 @@ public:
 
     bool        loaded;
 
-    static const int capacity =   4096; 
+    static size_t   capacity() { return  ESP.getMaxFreeBlockSize() - 512 ; } 
 };
 
 
-
+#if 0
+#define storePref( __prf, __src )  cfg[ #__prf ]= __src.__prf; if (myLog) myLog->log( String( "storePref: " #__prf  " <- ") + String( __src.__prf ) )
+#define _loadPref( __prf, __src )     __src.__prf=((cfg[ #__prf ])); if (myLog) myLog->log( String( "storePref: "  #__prf  " <- " ) + String( __src.__prf ) )
+#define _loadPrefStr( __prf, __src )  replaceString(((char**)&__src.__prf), cfg[ #__prf ]); if (myLog) myLog->log( (String( "loadPrefStr: ") + #__prf + " <- " + String( __src.__prf ) )
+#define loadPref( __prf, __def, __src )     __src.__prf=((cfg[ #__prf ]) | __def); if (myLog) myLog->log( String( "loadPref: " #__prf " <- " ) + String( __src.__prf ) )
+#define loadPrefStr( __prf, __def, __src )  replaceString(((char**)&__src.__prf),  cfg[ #__prf ] | __def); if (myLog) myLog->log( String( "loadPrefStr: ") + #__prf + " <- " + String( __src.__prf ) )
+#define setDef( __prf, __def, __src )     __src.__prf=cfg[ #__prf ] = __def; 
+#else
 #define storePref( __prf, __src )  cfg[ #__prf ]= __src.__prf
 #define _loadPref( __prf, __src )     __src.__prf=((cfg[ #__prf ]))
 #define _loadPrefStr( __prf, __src )  replaceString(((char**)&__src.__prf), cfg[ #__prf ])
 #define loadPref( __prf, __def, __src )     __src.__prf=((cfg[ #__prf ]) | __def)
 #define loadPrefStr( __prf, __def, __src )  replaceString(((char**)&__src.__prf),  cfg[ #__prf ] | __def)
+#define setDef( __prf, __def, __src )     __src.__prf=cfg[ #__prf ] = __def; if (myLog) myLog->log( String( "storePrefDefault: " #__prf  " <- ") + String( __src.__prf ) )
+
+#endif
 
 #define loadProfileXMember(__s, __idx, __src, __member )    __src.__s[__idx].__member = cfg[ #__s ][__idx][ #__member ]
 #define storeProfileXMember(__s, __idx, __src, __member )    cfg[ #__s ][__idx][ #__member ] = __src.__s[__idx].__member
+
+#define value2timeStr( vs )   (snprintf_P( (vs##_s), sizeof(vs##_s), PSTR("%2lu:%02lu"), (((vs)  % 86400L) / 3600), (((vs)  % 3600) / 60) ), (vs##_s))
     
 
 #endif /* PREFS_H_ */

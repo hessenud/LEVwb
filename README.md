@@ -41,6 +41,7 @@ Calibration of the power meter is in EEPROM but all the other config and the gui
 * WiFiManager			--  Captive Portal WIFI Configuration
 * WebSocketsServer		--
 * ArduinoOTA            --  SW Update Over-The-Air as the Hardware should be inside a wheater-proof housing
+* TimeLib
 
 ####optional
 * RemoteDebug        	-- if REMOTE_DEBUG works only with patches: delete the Websockets-implementation to prevent linker trouble

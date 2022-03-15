@@ -8,11 +8,12 @@
 #define TMR_PROFILE_FILE  "_timers.json"
 
 int eeprom_wp = 0;
+
 Prefs::Prefs()
 {
     hostname=0; 
     ota_passwd=0; 
-    assumed_power=0; 
+    assumed_power=MAX_CONSUMPTION; 
     mqtt_broker=0; 
     mqtt_broker_port=0; 
     mqtt_user=0; 
@@ -106,45 +107,68 @@ void POW::savePrefs(DynamicJsonDocument&cfg)
 
 void saveDevice()
 {
-    DynamicJsonDocument cfg(Prefs::capacity);
-
+    DynamicJsonDocument cfg(Prefs::capacity());
+    
     //--- device description
-    storePref(  ota_passwd, g_prefs );
-    storePref(  hostname, g_prefs );
-
-    storePref(  device_name, g_prefs);
-    storePref(  model_name, g_prefs);
-    storePref(  serialNr, g_prefs  );
-    storePref(  modelVariant, g_prefs);
-    storePref(  maxPwr, g_prefs );
-    storePref(  use_oled, g_prefs );
-    storePref(  timezone, g_prefs );
+    storePref(  ota_passwd,   g_prefs );
+    storePref(  hostname,     g_prefs );
+    storePref(  device_name,  g_prefs );
+    storePref(  model_name,   g_prefs );
+    storePref(  serialNr,     g_prefs );
+    storePref(  modelVariant, g_prefs );
+    storePref(  maxPwr,       g_prefs );
+    storePref(  use_oled,     g_prefs );
+    storePref(  timezone,     g_prefs );
     storePref(  absTimestamp, g_prefs );
 
     // Serialize JSON to file
-    File file = fileSystem->open(DEVICE_FILE, "w+");
-    if (serializeJsonPretty(cfg, file) == 0) {
-        Serial.println( F("Failed to write to file") );
+    File file = fileSystem->open(DEVICE_FILE, "w+");    
+    size_t len = serializeJsonPretty(cfg, file);
+
+    if (!file || (len == 0 )) {
+      DEBUG_PRINT("failed to write to DEVICE_FILE\n");
+      if(myLog)  myLog->log( "failed to write to DEVICE_FILE", true );
     }
 
-    file.close();
+
+   DEBUG_PRINT( " close DEVICE_FILE\n" );
+   file.close();
+#ifdef MAY_USE_SERIAL
+    serializeJsonPretty(cfg, Serial);
+#endif
+   DEBUG_PRINT( " writteen to DEVICE_FILE\n" );
 }
 
-void loadDevice()
+bool loadDevice()
 {
-
-    DynamicJsonDocument cfg(Prefs::capacity);
-
+    DynamicJsonDocument cfg(Prefs::capacity());
     File file = LittleFS.open(DEVICE_FILE,"r");
     // Deserialize the JSON document
     DeserializationError error = deserializeJson(cfg, file);
-    if ((error != DeserializationError::Ok )) { 
-        saveDevice( );
+    file.close();
+    if ((error != DeserializationError::Ok )) {     
+      
+        DEBUG_PRINT("Device DeserializationError: %d\n", error);
+
+        
+        setDef(  ota_passwd, "wadsdapassvoid", g_prefs);
+        setDef(  hostname, HOSTNAME, g_prefs);
+        setDef(  device_name, DEVICE_NAME, g_prefs);
+        setDef(  model_name, HOSTNAME, g_prefs );
+        setDef(  serialNr, 9999, g_prefs  );
+        setDef(  updateTime, 1000, g_prefs  );
+        setDef(  modelVariant,  0, g_prefs );
+
+        setDef(  maxPwr, MAX_CONSUMPTION, g_prefs );
+        setDef(  use_oled, false, g_prefs );
+        setDef(  timezone, 200, g_prefs );
+        setDef(  absTimestamp, false, g_prefs );
+        return true;
     } else {
         loadPrefStr(  ota_passwd, "wadsdapassvoid", g_prefs);
         loadPrefStr(  hostname, HOSTNAME, g_prefs);
         loadPrefStr(  device_name, DEVICE_NAME, g_prefs);
-        loadPrefStr(  model_name, HOSTNAME " Dev", g_prefs );
+        loadPrefStr(  model_name, HOSTNAME, g_prefs );
         loadPref(     serialNr, 9999, g_prefs  );
         loadPref(     updateTime, 1000, g_prefs  );
         loadPref(     modelVariant,  0, g_prefs );
@@ -152,29 +176,32 @@ void loadDevice()
         loadPref(     maxPwr, MAX_CONSUMPTION, g_prefs );
         _loadPref(     use_oled, g_prefs );
         loadPref(  timezone, 200, g_prefs );
-        loadPref(  absTimestamp, false, g_prefs );
+        _loadPref(  absTimestamp, g_prefs );
     }
-
-    file.close();
+    
+    if (g_prefs.maxPwr == 0)  g_prefs.maxPwr    = MAX_CONSUMPTION;
+    if (g_prefs.hostname == 0)  g_prefs.hostname    = HOSTNAME;
+    return false;
 }
 
 void saveParams()
 {
+    DynamicJsonDocument cfg(Prefs::capacity());
+    
 
-    DynamicJsonDocument cfg(Prefs::capacity);
-
+    if (myLog)  myLog->log( " write to PREFS_FILE", true );
     //--- device setting
-    storePref(  assumed_power, g_prefs);
-    storePref(  mqtt_broker, g_prefs);
-    storePref(  mqtt_broker_port, g_prefs);
-    storePref(  mqtt_user, g_prefs);
-    storePref(  mqtt_password, g_prefs);
-    storePref(  updateTime, g_prefs);
+    storePref( assumed_power, g_prefs);
+    storePref( mqtt_broker, g_prefs);
+    storePref( mqtt_broker_port, g_prefs);
+    storePref( mqtt_user, g_prefs);
+    storePref( mqtt_password, g_prefs);
+    storePref( updateTime, g_prefs);
 
-    storePref(  devType, g_prefs );
-    storePref(  intr, g_prefs   );
+    storePref( devType, g_prefs );
+    storePref( intr, g_prefs   );
     storePref( optionalEnergy, g_prefs   );
-    storePref(  defCharge, g_prefs );
+    storePref( defCharge, g_prefs );
 
     storePref( autoDetect, g_prefs );
     storePref( ad_on_threshold , g_prefs);
@@ -184,24 +211,47 @@ void saveParams()
     storePref( ad_prolong_inc, g_prefs );
 
     // Serialize JSON to file
-    File file = fileSystem->open(PREFS_FILE, "w+");
-    if (serializeJsonPretty(cfg, file) == 0) {
-        Serial.println( F("Failed to write to file") );
+    File file = fileSystem->open(PREFS_FILE, "w+");    
+    size_t len = serializeJsonPretty(cfg, file);
+    if (!file || (len == 0 )) {
+      if (myLog) myLog->log( "Failed to write to PREFS_FILE", true );
     }
-
     file.close();
+#ifdef MAY_USE_SERIAL
+    serializeJsonPretty(cfg, Serial);
+#endif
 }
 
-void loadParams()
+bool loadParams()
 {
-
-    DynamicJsonDocument cfg(Prefs::capacity);
+    DynamicJsonDocument cfg(Prefs::capacity());     
 
     File file = LittleFS.open(PREFS_FILE,"r");
     // Deserialize the JSON document
     DeserializationError error = deserializeJson(cfg, file);
+    
+    file.close();
     if ((error != DeserializationError::Ok )) { 
-        saveParams();
+      
+        DEBUG_PRINT("Params DeserializationError: %d\n", error);
+        
+        setDef(  assumed_power, MAX_CONSUMPTION, g_prefs );
+        setDef(  mqtt_broker, "", g_prefs  );
+        setDef(  mqtt_broker_port, 0, g_prefs);
+        setDef(  mqtt_user, "", g_prefs    );
+        setDef(  mqtt_password, "", g_prefs);
+        
+        setDef(  devType,  uSEMP::Other, g_prefs);
+        setDef(  intr  ,false, g_prefs );
+        setDef( optionalEnergy, false,g_prefs );
+        setDef(     defCharge, 2000, g_prefs );
+        setDef(     autoDetect, false, g_prefs);
+        setDef(  ad_on_threshold, 0, g_prefs);
+        setDef( ad_on_time, 0, g_prefs);
+        setDef( ad_off_threshold, 0, g_prefs);
+        setDef(  ad_off_time, 0, g_prefs);
+        setDef( ad_prolong_inc, 0, g_prefs );
+        return true;
     } else {
         loadPref(     assumed_power, MAX_CONSUMPTION, g_prefs );
         loadPrefStr(  mqtt_broker, "", g_prefs  );
@@ -219,19 +269,17 @@ void loadParams()
         loadPref( ad_off_threshold, 0, g_prefs);
         loadPref(  ad_off_time, 0, g_prefs);
         loadPref( ad_prolong_inc, 0, g_prefs );
-
-        if (g_prefs.maxPwr == 0)  g_prefs.maxPwr    = MAX_CONSUMPTION;
-
     }
-
-    file.close();
+    if (g_prefs.maxPwr == 0)  g_prefs.maxPwr    = MAX_CONSUMPTION;
+    if (g_prefs.assumed_power == 0)  g_prefs.assumed_power = MAX_CONSUMPTION;
+    return false;
 }
 
 void saveChgPrf()
 {
+    DynamicJsonDocument cfg(Prefs::capacity());     
 
-    DynamicJsonDocument cfg(Prefs::capacity);
-
+    if (myLog) myLog->log( " write to CHG_PROFILE_FILE",true );
     // profiles
     for (unsigned n = 0; n < N_POW_PROFILES; ++n) {
         storeProfileXMember( powProfile, n, g_prefs, valid );
@@ -247,11 +295,14 @@ void saveChgPrf()
 
     // Serialize JSON to file
     File file = fileSystem->open(CHG_PROFILE_FILE, "w+");
-    if (serializeJsonPretty(cfg, file) == 0) {
-        Serial.println( F("Failed to write to file") );
+    size_t len = serializeJsonPretty(cfg, file);
+    if (!file || (len == 0 )) {
+        if (myLog) myLog->log( "failed to write to CHG_PROFILE_FILE", true );
     }
-
     file.close();
+#ifdef MAY_USE_SERIAL
+    serializeJsonPretty(cfg, Serial);
+#endif
 }
 
 void extractChgPrf(DynamicJsonDocument& cfg)
@@ -270,30 +321,29 @@ void extractChgPrf(DynamicJsonDocument& cfg)
     }
 }
 
-void loadChgPrf()
-{
-
-    DynamicJsonDocument cfg(Prefs::capacity);
-
+bool loadChgPrf()
+{ 
+    DynamicJsonDocument cfg(Prefs::capacity());     
     File file = LittleFS.open(CHG_PROFILE_FILE,"r");
     // Deserialize the JSON document
     DeserializationError error = deserializeJson(cfg, file);
-    if ((error != DeserializationError::Ok )) { 
-        saveChgPrf();
-    } else {
-
-        extractChgPrf(cfg);
-
-    }
-
     file.close();
+    if ((error != DeserializationError::Ok )) { 
+      
+        DEBUG_PRINT("ChgPrfDeserializationError: %d\n", error);
+        return true;
+    } else {
+        extractChgPrf(cfg);
+    }
+    return false;
 }
 
 
 void saveTimers()
 {
-
-    DynamicJsonDocument cfg(Prefs::capacity);
+    if(myLog)  myLog->log( "write to file TMR_PROFILE_FILE", true);
+   
+    DynamicJsonDocument cfg(Prefs::capacity());     
     for (unsigned n = 0; n < N_TMR_PROFILES; ++n) {
         storeProfileXMember(tmrProfile, n, g_prefs, valid);
         storeProfileXMember( tmrProfile, n, g_prefs, sw_time );
@@ -312,11 +362,14 @@ void saveTimers()
     }
     // Serialize JSON to file
     File file = fileSystem->open(TMR_PROFILE_FILE, "w+");
-    if (serializeJsonPretty(cfg, file) == 0) {
-        Serial.println( F("Failed to write to file") );
+    size_t len = serializeJsonPretty(cfg, file );
+    if (!file || (len == 0 )) {
+       if (myLog)  myLog->log( "Failed to write to file TMR_PROFILE_FILE", true);
     }
-
     file.close();
+#ifdef MAY_USE_SERIAL
+    serializeJsonPretty(cfg, Serial);
+#endif
 }
 
 void extractTimers(DynamicJsonDocument& cfg)
@@ -340,69 +393,58 @@ void extractTimers(DynamicJsonDocument& cfg)
     }
 }
 
-void loadTimers()
+bool loadTimers()
 {
-    DynamicJsonDocument cfg(Prefs::capacity);
+    DynamicJsonDocument cfg(Prefs::capacity());     
 
     File file = LittleFS.open(TMR_PROFILE_FILE,"r");
     // Deserialize the JSON document
     DeserializationError error = deserializeJson(cfg, file);
+    file.close();
+    
     if ((error != DeserializationError::Ok )) { 
-        saveTimers();
+        DEBUG_PRINT("Timer DeserializationError: %d\n", error);
+        return true;
     } else {
         extractTimers(cfg);
     }
-
-    file.close();
+    return false;
 }
 
 
 
-void loadPrefs()
-{
-    ////////////////////////////////////////////
-    // Device COnfiguration
-    DEBUG_PRINT("JsonDeserializationBuffer capacity:%u\n", Prefs::capacity  );
-
-    if (  LittleFS.exists( DEVICE_FILE ) ) {
-        loadDevice();
-        loadTimers();
-        loadParams();
-        loadChgPrf();
-    } else {
-        DEBUG_PRINT("Initialize prefs and FS");
-        g_prefs.hostname = HOSTNAME;
-        g_prefs.device_name   = DEVICE_NAME;
-        g_prefs.model_name    = HOSTNAME " DevBoard" ;
-        g_prefs.modelVariant   = 1;
-        g_prefs.serialNr  = 1;
-
-        g_prefs.use_oled  = false;
-        g_prefs.mqtt_broker   = "";
-        g_prefs.mqtt_broker_port = 0;
-        g_prefs.mqtt_user     = "";
-        g_prefs.mqtt_password = "";
-
-        g_prefs.updateTime    = 1000;
-        g_prefs.devType   = 0;
-        g_prefs.maxPwr    = MAX_CONSUMPTION;
-
-        g_prefs.assumed_power = MAX_CONSUMPTION;     ///< assumed power for calculations
-        g_prefs.intr      = true;
-        g_prefs.defCharge = 1000;
-
-        savePrefs();
-        loadPrefs();
-        return;
-
-    } 
-    g_prefs.loaded = true;
- 
-}
 
 void savePrefs() {
+  
+    DEBUG_PRINT("***********savePrefs\n");
+    DEBUG_PRINT("JsonSerializationBuffer capacity:%u  max avail:%d \n", Prefs::capacity, ESP.getMaxFreeBlockSize() - 512  );
+    
     saveDevice();
     saveParams();
     saveChgPrf();
     saveTimers();
+
+    fileSystem->end();
+    fileSystem->begin();
+}
+
+
+void loadPrefs()
+{
+    bool need_save = false; 
+    ////////////////////////////////////////////
+    // Device COnfiguration
+    DEBUG_PRINT("JsonDeserializationBuffer capacity:%u  max avail:%d \n", Prefs::capacity, ESP.getMaxFreeBlockSize() - 512  );
+    need_save |= loadDevice();
+    need_save |= loadParams();
+    need_save |= loadChgPrf();
+    need_save |= loadTimers();
+    
+    g_prefs.loaded = true;
+    if ( need_save ) {
+      DEBUG_PRINT("need to save Preferences!\n");
+      if(myLog) myLog->log("need to save Preferences!\n",true);
+      savePrefs();
+    }
+    
 }

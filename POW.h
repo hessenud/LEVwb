@@ -512,6 +512,7 @@ public:
     unsigned calcOnTime( unsigned requestedEnergy, unsigned avr_pwr);
     void setprefs( unsigned i_cumulatedEnergy, double i_pwrMultiplier, double i_currentMultiplier, double i_voltageMultiplier);
 
+    void forceAdRequest();
     void resetAutoDetectionState() { m_ad_state = AD_OFF; }
     void handlePwrReq();
     void handleSimReq();
@@ -526,7 +527,7 @@ public:
      * false => the device runs w/o EM control. E.g. on forced operation even when EM suggests OFF
      *          of when using a pure Timer, or alternative decision
      */
-    bool online;
+    bool m_online;
 
     /**
      * @param i_state   bool true -> relay/pwr on

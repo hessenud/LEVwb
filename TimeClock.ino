@@ -71,7 +71,7 @@ void setTimers()
                 DEBUG_PRINT(" Timer(%u) in %s\n", n, TimeClk::getTimeString(g_prefs.tmrProfile[n].sw_time) );
 #if 0
                 g_prefs.tmrProfile[n].sw_time = TimeClk::daytime2unixtime(g_prefs.tmrProfile[n].sw_time, _now);
-                if( g_prefs.tmrProfile[n].sw_time <= _now ) g_prefs.tmrProfile[n].sw_time += 1 Day;
+                if( g_prefs.tmrProfile[n].sw_time <= _now ) g_prefs.tmrProfile[n].sw_time += 1 DAY;
 #else
                 g_prefs.tmrProfile[n].sw_time += _now;
 #endif
@@ -91,7 +91,7 @@ void setupTimeClk(int i_timeZone)
 {
     ///@todo: there are some good libraries for ntp/timezone etc out there...  eventually use them
     g_Clk.begin( i_timeZone, "fritz.box" );
-    g_Timerlist.append( new uTimer( TimeClk::daytime2unixtime(1 Hrs, getTime()) /*0100h*/, 1 DAY, true, true, dailyChores ));
+    g_Timerlist.append( new uTimer( TimeClk::daytime2unixtime(1 HOUR, getTime()) /*0100h*/, 1 DAY, true, true, dailyChores ));
 
 }
 

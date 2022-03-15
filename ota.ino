@@ -2,7 +2,6 @@
 
 void loopOTA() {
   ArduinoOTA.handle();
-  
 }
 
 
@@ -13,8 +12,8 @@ void setupOTA() {
 
   // Hostname defaults to esp8266-[ChipID]
   // ArduinoOTA.setHostname( "DevBoard" );
-  ArduinoOTA.setHostname( g_prefs.hostname );
-
+  
+  ArduinoOTA.setHostname( g_prefs.hostname ? g_prefs.hostname : "UNNAMEDDEV" );
   // No authentication by default
   // ArduinoOTA.setPassword( g_prefs.ota_passwd );
 
@@ -56,5 +55,9 @@ void setupOTA() {
       DEBUG_PRINT("End Failed\n");
     }
   });
+
+  DEBUG_PRINT("ArduinoOTA.begin()");
   ArduinoOTA.begin();
+  
+  DEBUG_PRINT("ArduinoOTA set up...");
 }

@@ -11,9 +11,9 @@ void unblockingDelay(unsigned long mseconds) {
 
 
 POW::POW( uSEMP* i_semp, AppCb_t i_appCb )
-:m_applicationCB(i_appCb),m_sense(0), m_semp(i_semp), m_activePwr(0), m_voltage(0), m_current(0)
+: m_sense(0), m_semp(i_semp), m_activePwr(0), m_voltage(0), m_current(0)
 , m_apparentPwr(0), m_averagePwr(0), m_pwrFactor(0), m_cumulatedEnergy(0),_cumulatedEnergy(0)
-, m_activeProfile(0), m_ad_state(AD_OFF), online(true)
+, m_activeProfile(0), m_ad_state(AD_OFF), m_applicationCB(i_appCb), m_online(true)
 {
     m_last_update=millis();
 }  
@@ -26,7 +26,7 @@ void POW::setup()
     // Open the relay to switch on the load
     m_relayState = RELAY_OFF;
     m_semp->setEmState( EM_OFF );
-    m_semp->acceptEMSignal( online );
+    m_semp->acceptEMSignal( m_online );
 
     m_pwrIdx = 0;
     m_averagePwr = m_minPwr=m_maxPwr = 0;
@@ -197,6 +197,30 @@ void POW::handleSimpleReq()
 
 }
 
+void POW::forceAdRequest()
+{
+    DEBUG_PRINT(" manual immediate Energy Request\n");
+    if(myLog) myLog->log("manual immediate Energy Request\n");
+    // a energy request might be pending at this point:
+    // the EM Device was switched on while waiting on the EM and a job was programmed (e.g. washingmachine) and started
+    // this is not the usual use-case, because normally a Energy request is EIHTER already planned OR created right now
+    // so all plans are deleted and a new request generated.
+    // this can be handled more intelligently... but after brewing over this, i decided it would not be worth the effort
+
+
+    setRelay( true );
+    m_ad_state = AD_ON;
+    if(m_applicationCB) m_applicationCB( APP_REQ, 0);
+    unsigned long _now = getTime();
+    DEBUG_PRINT(" modifyPlanTime(0,...)\n" );
+
+    unsigned required = g_prefs.assumed_power ? (Wh2Ws(g_prefs.defCharge)/(  g_prefs.assumed_power)) /* as Energy */
+                                                : g_prefs.defCharge /* as Time in seconds */;
+    m_semp->modifyPlanTime(0, _now, required,  0,  _now, _now+required+60  );
+
+
+}
+
 void POW::suspendAutodetect()
 {
     // override AD state to suppress unintended overwrite
@@ -321,9 +345,9 @@ void POW::handleSimReq()
         String p1Val = http_server.arg(n);
         //float value= atof( p1Val.c_str() );
         DEBUG_PRINT("p%dName: %s  val: %s\n",n, p1Name.c_str(), p1Val.c_str() );
-        if (p1Name == String("pwron"))         {  resp = "pwron";  setSimPwr( true ); myLog->log("set SIM Pwr ON");
+        if (p1Name == String("pwron"))         {  resp = "pwron";  setSimPwr( true ); if(myLog) myLog->log("set SIM Pwr ON");
        
-        } else if (p1Name == String("pwroff")) {  resp = "pwroff"; setSimPwr( false );  myLog->log("set SIM Pwr OFF");
+        } else if (p1Name == String("pwroff")) {  resp = "pwroff"; setSimPwr( false );  if(myLog) myLog->log("set SIM Pwr OFF");
        
         } else if (p1Name == String("factor")) {  resp = "factor: " + p1Val;
         } else {
@@ -401,8 +425,8 @@ PowProfile  POW::findTimeFrame( bool i_timf, unsigned i_req  )
     bool found = false;
     struct {
         unsigned prfIdx;
-        long     startTime;   // modified startTime
-        long     endTime;     // modified endTime
+        unsigned long     startTime;   // modified startTime
+        unsigned long     endTime;     // modified endTime
     } candidate;
     candidate.prfIdx = 0xdead;
     candidate.startTime = 0;
@@ -433,7 +457,7 @@ PowProfile  POW::findTimeFrame( bool i_timf, unsigned i_req  )
                         candidate.prfIdx =  idx;
                         candidate.startTime = startTime;
                         candidate.endTime = endTime;
-                        DEBUG_PRINT("%s candidate: idx:%u :> %s (%u %s) -> %s (%u) \n\t", found ? "better" : "a", idx
+                        DEBUG_PRINT("%s candidate: idx:%u :> %s (%lu %s) -> %s (%lu) \n\t", found ? "better" : "a", idx
                                 , Tstr(TimeClk::getTimeString(candidate.startTime)), candidate.startTime, dT>0?"+1d":""
                                 , Tstr(TimeClk::getTimeString(candidate.endTime)), candidate.endTime );
                         found = true;
@@ -441,9 +465,9 @@ PowProfile  POW::findTimeFrame( bool i_timf, unsigned i_req  )
                 }
             }
         }
-        dT += 1 Day; // try again tomorrow
+        dT += 1 DAY; // try again tomorrow
         if ( !found )  DEBUG_PRINT(" no frame found try again tomorrow\n");
-    } while (  !found && (dT <= 1 Day) );
+    } while (  !found && (dT <= 1 DAY) );
 
     // PowProfile( bool i_tf, bool     i_tod,bool   i_armed, bool i_repeat,  unsigned i_est, unsigned i_let, unsigned i_req, unsigned i_opt )
 
@@ -458,14 +482,14 @@ PowProfile  POW::findTimeFrame( bool i_timf, unsigned i_req  )
 void POW::prolongPlan( PlanningData* i_plan )
 {
     DEBUG_PRINT(" prolongPlan  by %u\n", g_prefs.ad_prolong_inc);
-    myLog->log(String("prolong Timeframe by") + g_prefs.ad_prolong_inc + "s\n" );
+    if(myLog) myLog->log(String("prolong Timeframe by") + g_prefs.ad_prolong_inc + "s\n" );
     i_plan->updateEnergy(  getTime(), relayState, 0, 0,  g_prefs.ad_prolong_inc);
 }
 
 void POW::procAdRequest()
 {
     DEBUG_PRINT(" Autodetected  Energy Request\n");
-    myLog->log("Autodetected  Energy Request\n");
+    if(myLog) myLog->log("Autodetected  Energy Request\n");
     // a energy request might be pending at this point:
     // the EM Device was switched on while waiting on the EM and a job was programmed (e.g. washingmachine) and started
     // this is not the usual use-case, because normally a Energy request is EIHTER already planned OR created right now
@@ -485,8 +509,8 @@ void POW::procAdRequest()
             DEBUG_PRINT(" modifyPlanTime(0,...)\n" );
             unsigned dayoffset = _now - (_now%(1 DAY));
             unsigned required = Wh2Ws(g_prefs.defCharge)/( g_prefs.assumed_power ? g_prefs.assumed_power :1);
-            //if ( powPrf.est + dayoffset < _now ) dayoffset  += 1 Day; 
-            //if ( powPrf.let + dayoffset < _now ) powPrf.let += 1 Day;
+            //if ( powPrf.est + dayoffset < _now ) dayoffset  += 1 DAY; 
+            //if ( powPrf.let + dayoffset < _now ) powPrf.let += 1 DAY;
             m_semp->modifyPlanTime(0, _now, required,  powPrf.opt,  powPrf.est + dayoffset, powPrf.let + dayoffset );
         } else {
             DEBUG_PRINT(" modifyPlan(0, prf:%d\n", powPrf.est);
@@ -533,6 +557,7 @@ ad_event_t POW::autoDetect() {
                 if ((_now- m_ad_start) > g_prefs.ad_on_time)     {
                     DEBUG_PRINT(" autoDetect state:AD_TEST_ON ==> AD_ON\n" );
                     m_ad_state = AD_ON; m_ad_start = _now;
+                    if(myLog) myLog->log( (String(" autoDetect state: ") + m_ad_state  + String("   PWR: ") + activePwr + ("  dt=") + (_now- m_ad_start) + "BELOW THRESHOLD  ==> AD_TEST_OFF") );
                     ret = AD_REQUEST;
                 }
             } else {
@@ -544,7 +569,6 @@ ad_event_t POW::autoDetect() {
         case AD_ON:
             ret = AD_RQ_ACTIVE;
             if ( relayState ) {
-              myLog->log(String(" autoDetect state: ") + m_ad_state  + String("   PWR: ") + activePwr + ("  dt=") + (_now- m_ad_start)  );
                 if ( activePwr < g_prefs.ad_off_threshold )  {
                     DEBUG_PRINT(" autoDetect state:AD_ON  BELOW THRESHOLD  ==> AD_TEST_OFF\n" );
                     m_ad_state = AD_TEST_OFF;  m_ad_start = _now;
@@ -561,6 +585,7 @@ ad_event_t POW::autoDetect() {
 
                     if ((_now- m_ad_start)> g_prefs.ad_off_time)    {
                         DEBUG_PRINT(" autoDetect state:AD_TEST_OFF ==> AD_OFF\n" );
+                        if(myLog) myLog->log(" autoDetect state:AD_TEST_OFF ==> AD_OFF\n" );
                         m_ad_state = AD_OFF;  m_ad_start = _now;
                         ret = AD_END_REQUEST;
                     }
@@ -675,9 +700,10 @@ void POW::loop()
             break;
         case  AD_END_REQUEST:
             DEBUG_PRINT(" Autodetected  End of Energy Request\n");
-            myLog->log("Autodetected  End of Energy Request\n");
+            if(myLog) myLog->log("Autodetected  End of Energy Request\n");
             m_semp->resetPlan(); 
             endOfPlan(true);
+            // set Blink code End Of Last Request
             break;
         case  AD_RQ_ACTIVE:
             // prolong active Plan if job not completed
@@ -689,7 +715,7 @@ void POW::loop()
                  prolongPlan(activePlan);
               }
             } else {
-              myLog->log("resetAutoDetectionState <= no active plan\n");
+              if(myLog) myLog->log("resetAutoDetectionState <= no active plan\n");
               resetAutoDetectionState();
             }
             break;
@@ -729,6 +755,7 @@ void POW::loop()
 
 void POW::setRelay(bool i_state )
 {
+  if(myLog) myLog->log( String("setRelay: ") + i_state ? "ON" : "OFF" );
     if ( relayState != i_state ) {
         digitalWrite( relayPin, m_relayLogic^(m_relayState = i_state) );
     }
@@ -743,29 +770,32 @@ void POW::setRelay(bool i_state )
  */
 void POW::rxEmState(EM_state_t i_em_state, unsigned /*i_recommendedPwr*/ )
 {
-    if ( online ) {
+    if ( m_online ) {
         if(i_em_state != EM_OFFLINE) {
-          myLog->log((String("POW::rxEmState ") + (i_em_state==EM_ON ? "ON" : (i_em_state == EM_OFF ? "OFF" : "OFFLINE")) ));
+          if(myLog) myLog->log( String("POW::rxEmState ") + (i_em_state==EM_ON ? "ON" : (i_em_state == EM_OFF ? "OFF" : "OFFLINE")) );
           if ( i_em_state == EM_ON ) {
             setRelay(true);
           } else {
-            if ( !g_prefs.intr ) setRelay(false);
-            else setRelay( relayState );
+            if ( g_prefs.intr ) setRelay(false);
+            else  if(myLog) myLog->log( String("POW::rxEmState OFF ignored because interruptions not allowed ") );
           }
-        }
-    }
+        } 
+     } else {
+        if(myLog) myLog->log( String("POW::rxEmState while beeing offline ") + (i_em_state==EM_ON ? "ON" : (i_em_state == EM_OFF ? "OFF" : "OFFLINE")) );
+     }
 }
 
 void  POW::endOfPlan(bool i_force  )
 {
   // some self -defense against unwanted termination by EM  
-    if ( (online && ( m_ad_state == AD_OFF)) || i_force ) {
+    if ( i_force || (m_online && (!g_prefs.autoDetect || ( m_ad_state == AD_OFF)))  ) {
         DEBUG_PRINT("End OF Plan!!\n");
-        online = true; // if plan is forcedly terminated then go online again
+        if(myLog) myLog->log( String("End Of Plan ") + i_force ? "FORCED " :"" + g_prefs.autoDetect ? "AD_OFF" : "OFF"   );
+        m_online = true; // if plan is forcedly terminated then go online again
         setRelay( false ); ///< this will reflect EM state EM_OFF to semp object
         if(m_applicationCB) m_applicationCB( APP_EOR, 0);
         resetAutoDetectionState();
-        m_semp->acceptEMSignal( (online = true) );
+        m_semp->acceptEMSignal( (m_online = true) );
     }
 }
 
@@ -786,8 +816,6 @@ void POW::toggleLED()
 
 void dump_profile( PowProfile& i_prf )
 {
-#define value2timeStr( vs )   (snprintf_P( (vs##_s), sizeof(vs##_s), PSTR("%1u.%02lu:%02lu"), (vs/86400L),(((vs)  % 86400L) / 3600), (((vs)  % 3600) / 60) ), (vs##_s))
-
     DEBUG_PRINT("Profile:");
     DEBUG_PRINT("%s %5s %3s %4s %3s %7u-%7u |  %7s/%7s  r:%u/o:%u\n", i_prf.valid ? "[*]" : "[ ]",
             i_prf.timeframe ? "TMR" : "NRGY",
@@ -810,8 +838,8 @@ void POW::dump()
 
 //-------- 
 HLW8012* g_HLW;
-void ICACHE_RAM_ATTR hlw_cf1_interrupt(){ if(g_HLW) g_HLW->cf1_interrupt(); }
-void ICACHE_RAM_ATTR hlw_cf_interrupt(){ if(g_HLW) g_HLW->cf_interrupt();  }
+void IRAM_ATTR hlw_cf1_interrupt(){ if(g_HLW) g_HLW->cf1_interrupt(); }
+void IRAM_ATTR hlw_cf_interrupt(){ if(g_HLW) g_HLW->cf_interrupt();  }
 
 void POW_R1::setInterrupts() {
     g_HLW = static_cast<PwrSensHLW8012*>(m_sense)->getHLW8012();
